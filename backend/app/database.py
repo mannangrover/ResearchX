@@ -1,0 +1,104 @@
+"""SQLite persistence for projects.
+
+Each project row stores the user input plus the JSON output of every
+pipeline stage (profile, literature, score, refinement), so stages can be re-run
+independently and the UI can resume where the user left off.
+"""
+import json
+import sqlite3
+import uuid
+from datetime import datetime, timezone
+
+from .config import settings
+
+STAGE_COLUMNS = ("profile", "literature", "score", "refinement")
+
+
+def _connect() -> sqlite3.Connection:
+    conn = sqlite3.connect(settings.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db() -> None:
+    with _connect() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS projects (
+                id          TEXT PRIMARY KEY,
+                title       TEXT NOT NULL,
+                idea_text   TEXT NOT NULL DEFAULT '',
+                github_url  TEXT NOT NULL DEFAULT '',
+                domain      TEXT NOT NULL DEFAULT '',
+                stage       INTEGER NOT NULL DEFAULT 1,
+                profile     TEXT,
+                literature  TEXT,
+                score       TEXT,
+                refinement  TEXT,
+                created_at  TEXT NOT NULL,
+                updated_at  TEXT NOT NULL
+            )
+            """
+        )
+        # Migrate databases created before stage 6 existed
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(projects)")}
+        if "refinement" not in columns:
+            conn.execute("ALTER TABLE projects ADD COLUMN refinement TEXT")
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _row_to_dict(row: sqlite3.Row) -> dict:
+    d = dict(row)
+    for col in STAGE_COLUMNS:
+        d[col] = json.loads(d[col]) if d[col] else None
+    return d
+
+
+def create_project(title: str, idea_text: str, github_url: str, domain: str) -> dict:
+    pid = uuid.uuid4().hex[:12]
+    now = _now()
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO projects (id, title, idea_text, github_url, domain, stage, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
+            (pid, title, idea_text, github_url, domain, now, now),
+        )
+    return get_project(pid)
+
+
+def list_projects() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, title, github_url, domain, stage, created_at, updated_at"
+            " FROM projects ORDER BY updated_at DESC"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_project(pid: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM projects WHERE id = ?", (pid,)).fetchone()
+    return _row_to_dict(row) if row else None
+
+
+def save_stage(pid: str, column: str, data: dict, stage: int) -> dict:
+    """Store a stage result. Re-running an earlier stage clears later ones."""
+    if column not in STAGE_COLUMNS:
+        raise ValueError(f"Unknown stage column: {column}")
+    later = STAGE_COLUMNS[STAGE_COLUMNS.index(column) + 1:]
+    clears = "".join(f", {c} = NULL" for c in later)
+    with _connect() as conn:
+        conn.execute(
+            f"UPDATE projects SET {column} = ?, stage = ?, updated_at = ?{clears} WHERE id = ?",
+            (json.dumps(data), stage, _now(), pid),
+        )
+    return get_project(pid)
+
+
+def delete_project(pid: str) -> bool:
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM projects WHERE id = ?", (pid,))
+    return cur.rowcount > 0

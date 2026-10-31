@@ -1,0 +1,148 @@
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
+
+from ..auth import User, current_user
+from ..schemas import LiteratureRequest, ProjectCreate, ProposalUpdate, RefineMessage
+from ..services import pipeline, refinement_service
+from ..services.github_service import GitHubError, parse_repo_url
+from ..storage import get_store
+
+router = APIRouter(prefix="/api/projects", tags=["projects"])
+
+
+def _get_or_404(store, pid: str) -> dict:
+    project = store.get_project(pid)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    return project
+
+
+@router.get("")
+def list_projects(user: User = Depends(current_user)):
+    return get_store(user).list_projects()
+
+
+@router.post("", status_code=201)
+def create_project(body: ProjectCreate, user: User = Depends(current_user)):
+    url = pipeline.clean_url(body.github_url)
+    if url:
+        try:
+            parse_repo_url(url)
+        except GitHubError as e:
+            raise HTTPException(422, str(e))
+    return get_store(user).create_project(body.title.strip(), body.idea_text.strip(), url, body.domain.strip())
+
+
+@router.get("/{pid}")
+def get_project(pid: str, user: User = Depends(current_user)):
+    return _get_or_404(get_store(user), pid)
+
+
+@router.delete("/{pid}", status_code=204)
+def delete_project(pid: str, user: User = Depends(current_user)):
+    if not get_store(user).delete_project(pid):
+        raise HTTPException(404, "Project not found")
+
+
+@router.post("/{pid}/analyze")
+async def analyze(pid: str, user: User = Depends(current_user)):
+    store = get_store(user)
+    project = _get_or_404(store, pid)
+    try:
+        result = await run_in_threadpool(pipeline.run_analysis, project)
+    except GitHubError as e:
+        raise HTTPException(422, str(e))
+    return store.save_stage(pid, "profile", result, stage=2)
+
+
+@router.post("/{pid}/literature")
+async def literature(pid: str, body: LiteratureRequest | None = None, user: User = Depends(current_user)):
+    store = get_store(user)
+    project = _get_or_404(store, pid)
+    if not project["profile"]:
+        raise HTTPException(409, "Run project analysis (stage 2) first")
+    result = await run_in_threadpool(pipeline.run_literature, project, body.queries if body else None)
+    if not result["papers"]:
+        if result["errors"]:
+            detail = ("The paper sources are busy or rate-limited right now. Wait about 30 seconds and try again"
+                      " (adding OpenAlex / Semantic Scholar keys in backend/.env avoids this). Details: "
+                      + "; ".join(result["errors"]))
+        else:
+            detail = "No related papers found. Try simpler or broader search queries."
+        raise HTTPException(502, detail)
+    return store.save_stage(pid, "literature", result, stage=3)
+
+
+@router.post("/{pid}/score")
+async def score(pid: str, user: User = Depends(current_user)):
+    store = get_store(user)
+    project = _get_or_404(store, pid)
+    if not project["literature"]:
+        raise HTTPException(409, "Run literature analysis (stage 3) first")
+    result = await run_in_threadpool(pipeline.run_scoring, project)
+    return store.save_stage(pid, "score", result, stage=4)
+
+
+# ---------------------------------------------------------------- stage 6: interactive refinement
+def _scored_or_409(store, pid: str) -> dict:
+    project = _get_or_404(store, pid)
+    if not project["score"]:
+        raise HTTPException(409, "Compute the Research Opportunity Score (stage 4) first")
+    return project
+
+
+def _refine_stage(state: dict) -> int:
+    return 6 if state.get("approved") else 4
+
+
+@router.post("/{pid}/refine/start")
+async def refine_start(pid: str, user: User = Depends(current_user)):
+    store = get_store(user)
+    project = _scored_or_409(store, pid)
+    state = await run_in_threadpool(refinement_service.start, project)
+    return store.save_stage(pid, "refinement", state, stage=_refine_stage(state))
+
+
+@router.post("/{pid}/refine/message")
+async def refine_message(pid: str, body: RefineMessage, user: User = Depends(current_user)):
+    store = get_store(user)
+    project = _scored_or_409(store, pid)
+    state = await run_in_threadpool(refinement_service.reply, project, body.content)
+    return store.save_stage(pid, "refinement", state, stage=_refine_stage(state))
+
+
+@router.post("/{pid}/refine/propose")
+async def refine_propose(pid: str, user: User = Depends(current_user)):
+    store = get_store(user)
+    project = _scored_or_409(store, pid)
+    state = await run_in_threadpool(refinement_service.propose, project)
+    return store.save_stage(pid, "refinement", state, stage=_refine_stage(state))
+
+
+@router.put("/{pid}/refine/proposal")
+def refine_save_proposal(pid: str, body: ProposalUpdate, user: User = Depends(current_user)):
+    store = get_store(user)
+    project = _scored_or_409(store, pid)
+    state = refinement_service.save_proposal(project, body.proposal, body.approved)
+    return store.save_stage(pid, "refinement", state, stage=_refine_stage(state))
+
+
+@router.delete("/{pid}/refine")
+def refine_reset(pid: str, user: User = Depends(current_user)):
+    store = get_store(user)
+    _scored_or_409(store, pid)
+    return store.save_stage(pid, "refinement", None, stage=4)
+
+
+@router.post("/{pid}/refine/spinoff", status_code=201)
+def refine_spinoff(pid: str, user: User = Depends(current_user)):
+    """Create a new project from the approved proposal so it can be scored (before/after)."""
+    store = get_store(user)
+    project = _scored_or_409(store, pid)
+    state = project.get("refinement") or {}
+    if not state.get("approved") or not state.get("proposal"):
+        raise HTTPException(409, "Approve the refined proposal first")
+    data = refinement_service.spinoff_input(project)
+    new = store.create_project(data["title"], data["idea_text"], data["github_url"], data["domain"])
+    store.save_stage(pid, "refinement", {**state, "derived_project_id": new["id"]}, stage=6)
+    return new

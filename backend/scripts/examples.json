@@ -1,0 +1,26 @@
+[
+  {
+    "title": "Retrieval-augmented automated code review",
+    "idea_text": "An assistant that reviews pull requests using retrieval-augmented generation over the repository code and past review comments. We evaluate precision and recall of detected bugs against human reviewers on an open-source benchmark.",
+    "github_url": "https://github.com/qodo-ai/pr-agent",
+    "domain": "Software Engineering"
+  },
+  {
+    "title": "Face-recognition attendance system for classrooms",
+    "idea_text": "A camera at the classroom door recognises students' faces and marks attendance automatically, replacing the paper register. We compare face-recognition models on accuracy, speed on a low-cost laptop, and robustness to masks and poor lighting, using photos of 60 volunteer students.",
+    "github_url": "",
+    "domain": "Computer Vision"
+  },
+  {
+    "title": "Detecting plagiarism in student programming assignments",
+    "idea_text": "A tool that flags suspiciously similar code submissions in programming courses, even when students rename variables or reorder functions. It compares code structure (abstract syntax trees) instead of plain text, and we evaluate how many real plagiarism cases it catches versus the existing tool MOSS on past course submissions.",
+    "github_url": "",
+    "domain": "Software Engineering"
+  },
+  {
+    "title": "Smart traffic signals using reinforcement learning",
+    "idea_text": "Traffic lights that learn their own green-light timings from live queue lengths instead of using fixed timers. A reinforcement-learning agent controls the signals at a busy junction in the SUMO traffic simulator, and we measure the reduction in average waiting time compared with fixed-time signals.",
+    "github_url": "",
+    "domain": "Artificial Intelligence"
+  }
+]
