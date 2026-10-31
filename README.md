@@ -21,7 +21,7 @@ This repository implements stages 1–8 of the 10-stage workflow in the SRS, gro
 | 5 | Research Gap Discovery | ✅ Built |
 | 6 | Interactive Refinement (advisor chat → editable refined proposal → approve → new **version** of the same project: profile and papers are reused, only the ROS is re-computed; every version keeps its own data and can be opened and worked on separately) | ✅ Built |
 | 7 | Experiment Planning (hypotheses traced to RQs, datasets, baselines, metrics, experiments, ablations, timeline fitted to the time budget, risks; Markdown export) | ✅ Built |
-| 8 | Paper Evaluation (the student does the research, writes the paper and uploads it as PDF/DOCX/TeX/MD; **Review**: paper score on its own merits — contribution, methodology, results, clarity, references, reproducibility; **Research journey**: closest papers cited, stage 5 gaps addressed, stage 6 questions answered, stage 7 plan items done / changed (stronger or weaker) / not done — informational, changing the plan is allowed; draft history) | ✅ Built |
+| 8 | Paper Evaluation (the student does the research, writes the paper and uploads it as PDF/DOCX/TeX/MD). **Paper analysis** on its own terms: are the research questions, aims, hypotheses and contributions the paper states actually answered, are the abstract/conclusion claims backed by the results, six internal-consistency checks; paper score also covers methodology, clarity, references and reproducibility. **Compared with project** (information only): closest papers, stage 5 gaps, stage 6 questions, stage 7 plan done / changed / not done. Draft history. | ✅ Built |
 | 9–10 | Reviewer Simulation, Publication Guidance | Next milestones |
 
 ## Architecture

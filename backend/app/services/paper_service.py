@@ -4,9 +4,12 @@ The student implements the research (ideally following the stage 7 plan),
 writes the paper and uploads it (PDF, Word, LaTeX, Markdown or text).
 ResearchX does not write the paper; it evaluates it in two separate parts:
 
-  1. Review — the paper on its own merits: contribution, methodology,
-     results, clarity, references and reproducibility -> a paper score.
-     Following or not following the plan does not change this score.
+  1. Paper analysis — the paper on its own terms: are the research
+     questions, aims, hypotheses and contributions it states actually
+     answered / delivered, are the claims in its abstract and conclusion
+     supported by its results, and is it internally consistent. Together
+     with methodology, clarity, references and reproducibility this gives
+     the paper score. The project's plan plays no part in it.
   2. Research journey — how the paper relates to the project's history:
      differentiation from the closest papers (stage 3), research gaps
      addressed (stage 5), research questions answered (stage 6) and what was
@@ -58,19 +61,12 @@ REPRO_CHECKS = [
 
 CLAIM_WORDS = r"significant(?:ly)?|state[- ]of[- ]the[- ]art|outperform\w*|novel|first to|superior|dramatic(?:ally)?|substantial(?:ly)?"
 
-CRITERIA = [  # (key, name, weight) — LLM-judged part of the paper score
-    ("contribution", "Contribution & novelty", 20),
-    ("methodology", "Methodology", 20),
-    ("results", "Results & evidence", 20),
-    ("clarity", "Clarity & structure", 15),
-]
-
 REVIEWER_SYSTEM = (
-    "You are ResearchX's paper evaluator for student research papers. First judge the paper on its own merits, "
-    "like a fair conference reviewer. Then relate it to the project's history (closest papers, research gaps, "
-    "research questions, experiment plan) as information for the student: changing the plan is allowed, so judge "
-    "whether each change made the work stronger or weaker instead of penalising it. Quote or point to the paper "
-    "for every judgement. Respond with JSON only."
+    "You are ResearchX's paper evaluator for student research papers. Be a fair, careful reviewer: check whether the "
+    "paper delivers what it says it will (its own questions, aims, hypotheses and contributions), whether its claims "
+    "are supported by its results, and whether it is internally consistent. When asked to relate it to the project's "
+    "history, treat changes of direction or plan as allowed and judge whether they made the work stronger or weaker. "
+    "Quote or point to the paper for every judgement. Respond with JSON only."
 )
 
 
@@ -287,8 +283,98 @@ def _paper_excerpt(sections: list[dict], limit: int = 20000) -> str:
     return "\n\n".join(parts)[:limit]
 
 
-# ------------------------------------------------------------------ judgement (LLM, with a fallback)
-def _llm_judge(project: dict, history: dict, sections: list[dict], note: str) -> dict:
+# ------------------------------------------------------------------ 1. analysis of the paper itself
+ITEM_TYPES = ("research_question", "objective", "hypothesis", "contribution")
+CONSISTENCY = [  # (key, what is checked)
+    ("methods_evaluated", "Every proposed method or component is evaluated"),
+    ("results_complete", "Every described experiment has reported results"),
+    ("conclusion_follows", "Conclusions follow from the results (no overclaiming)"),
+    ("numbers_consistent", "Numbers in the abstract match the results"),
+    ("limitations", "Limitations / threats to validity are discussed"),
+    ("fair_comparison", "Comparisons with baselines are fair and explained"),
+]
+
+
+def _llm_analyse(sections: list[dict]) -> dict:
+    checks = "\n".join(f'"{k}": {label}' for k, label in CONSISTENCY)
+    prompt = f"""PAPER (excerpts by section):
+{_paper_excerpt(sections)}
+
+Analyse this paper ON ITS OWN TERMS. Return JSON:
+"items": every research question, objective/aim, hypothesis and claimed contribution the paper itself states
+  (usually in the abstract or introduction), each {{"type": "research_question"|"objective"|"hypothesis"|"contribution",
+  "text": as stated (short), "where_stated": section, "status": "answered"|"partial"|"not_answered",
+  "where_answered": section or "", "evidence": short quote from the results/discussion/conclusion, "comment": one sentence}}.
+  "answered" = the paper gives a clear answer backed by its results; "partial" = only partly or without evidence;
+  "not_answered" = never addressed, or left for future work.
+"claims": 3-6 main claims from the abstract and conclusion, each {{"claim": short quote, "source": "abstract"|"conclusion",
+  "status": "supported"|"partial"|"unsupported", "evidence": where the results support it or why not}},
+"consistency": {{{checks}}} — each value {{"status": "pass"|"warn"|"fail", "comment": one sentence}},
+"review": {{"contribution": {{"score": 0-10, "comment"}}, "methodology": {{...}}, "clarity": {{...}}}},
+"summary": 3-4 sentences on whether the paper delivers what it sets out to do,
+"strengths": [2-4 short strengths],
+"fixes": [{{"priority": "high"|"medium"|"low", "section", "issue", "fix"}}] (3-6, most important first)"""
+    data = llm_service.complete_json(REVIEWER_SYSTEM, prompt, 4000)
+    if not isinstance(data.get("items"), list) or not isinstance(data.get("consistency"), dict):
+        raise llm_service.LLMUnavailable("LLM analysis missing items or consistency checks")
+    return data
+
+
+ITEM_PATTERNS = [
+    ("research_question", r"\bRQ\s?\d\b|research questions?\b[^.]*[:?]|\?\s*$"),
+    ("hypothesis", r"\bwe hypothesi[sz]e|\bhypothesis\b|\bH\d\b"),
+    ("objective", r"\b(?:we aim|the aim|our aim|the goal|our goal|objective|this (?:paper|work|study) (?:aims|seeks))\b"),
+    ("contribution", r"\b(?:our contributions?|we contribute|contributions? (?:of this|are))\b|\bwe (?:propose|present|introduce)\b"),
+]
+
+
+def _fallback_analyse(sections: list[dict], body: str, checks: dict) -> dict:
+    """Without an LLM: find the paper's own questions/aims with patterns and check their terms in the results."""
+    front = _section(sections, "abstract", "front", "introduction")
+    answers = _section(sections, "results", "discussion", "conclusion")
+    answer_words = _tokens(answers)
+    items = []
+    for sentence in _sentences(front):
+        for kind, pattern in ITEM_PATTERNS:
+            if re.search(pattern, sentence, re.I):
+                terms = _tokens(sentence)
+                share = len(terms & answer_words) / len(terms) if terms else 0
+                items.append({"type": kind, "text": sentence[:240], "where_stated": "Introduction",
+                              "status": "answered" if share >= 0.55 else "partial" if share >= 0.3 else "not_answered",
+                              "where_answered": "Results / Conclusion" if share >= 0.3 else "", "evidence": "",
+                              "comment": f"{round(share * 100)}% of its key terms reappear in the results and conclusion (keyword check)."})
+                break
+    abstract = _section(sections, "abstract") or _section(sections, "front")
+    numbers = set(re.findall(r"\d+(?:\.\d+)?\s*%|\d+\.\d+", abstract))
+    found = {n for n in numbers if n.replace(" ", "") in _section(sections, "results", "discussion").replace(" ", "")}
+    claims = [{"claim": s[:220], "source": "abstract",
+               "status": "supported" if any(n in s for n in found) else "partial", "evidence": ""}
+              for s in _sentences(abstract) if re.search(r"\d", s)][:5]
+    has = lambda k: any(s["key"] == k for s in sections)  # noqa: E731
+    consistency = {
+        "methods_evaluated": {"status": "pass" if has("method") and has("results") else "warn", "comment": "Checked that a method and a results section exist."},
+        "results_complete": {"status": "pass" if has("results") else "fail", "comment": "Checked that a results section exists."},
+        "conclusion_follows": {"status": "pass" if has("conclusion") and not checks["unsupported_claim_count"] else "warn",
+                               "comment": f"{checks['unsupported_claim_count']} strong claims without a number or citation."},
+        "numbers_consistent": {"status": "pass" if numbers and found == numbers else "warn" if numbers else "warn",
+                               "comment": f"{len(found)} of {len(numbers)} numbers from the abstract appear in the results."},
+        "limitations": {"status": "pass" if re.search(r"limitation|threats? to validity", body, re.I) else "fail", "comment": "Searched for a limitations discussion."},
+        "fair_comparison": {"status": "pass" if re.search(r"baseline", body, re.I) else "warn", "comment": "Searched for baselines."},
+    }
+    note = "Estimated from the paper's structure (LLM unavailable)."
+    present = {s["key"] for s in sections}
+    return {
+        "items": items[:12], "claims": claims, "consistency": consistency,
+        "review": {"contribution": {"score": 6 if "related" in present else 4, "comment": note},
+                   "methodology": {"score": 3 + 3 * ("method" in present) + 3 * ("experiments" in present), "comment": note},
+                   "clarity": {"score": round(10 * (1 - len(checks["missing_sections"]) / len(REQUIRED)), 1), "comment": note}},
+        "summary": "Analysed without the LLM: questions and aims were found with patterns and matched with keywords, so check them yourself.",
+        "strengths": [], "fixes": [],
+    }
+
+
+# ------------------------------------------------------------------ 2. comparison with the project's history
+def _llm_compare(project: dict, history: dict, sections: list[dict], note: str) -> dict:
     papers = "\n".join(f"- {p['title']} ({p.get('year')})" for p in project["literature"]["papers"][:5])
     gaps = "\n".join(f"{g['id']}: {g['title']} — {g['description'][:200]}" for g in history["gaps"])
     rqs = "\n".join(f"{q['id']}: {q['question']}" for q in history["rqs"])
@@ -305,43 +391,22 @@ EXPERIMENT PLAN (stage 7):
 STUDENT'S NOTE ON CHANGES: {note or '(none)'}
 
 PAPER (excerpts by section):
-{_paper_excerpt(sections)}
+{_paper_excerpt(sections, 14000)}
 
-Return JSON:
-"review": {{"contribution": {{"score": 0-10, "comment": one sentence}}, "methodology": {{...}}, "results": {{...}}, "clarity": {{...}}}}
-  — judge the paper ONLY on its own merits; following or changing the plan must not affect these scores,
-"summary": 3-4 sentences judging the paper itself,
-"strengths": [2-4 short strengths],
-"fixes": [{{"priority": "high"|"medium"|"low", "section": section name, "issue": "...", "fix": concrete action}}] (3-6, most important first),
-"journey": {{
-  "summary": 2-3 sentences on how the paper relates to the project's history,
-  "differentiation": {{"status": "clear"|"partial"|"unclear", "comment": how it positions itself against the closest papers}},
-  "gaps": [{{"id": "G1", "status": "addressed"|"partial"|"not_addressed", "evidence": short quote}}] (every gap),
-  "research_questions": [{{"id": "RQ1", "status": "answered"|"partial"|"not_answered", "evidence": short quote}}] (every RQ),
-  "plan": [{{"id": plan item id, "status": "done"|"changed"|"not_done", "effect": "stronger"|"similar"|"weaker"|null, "evidence": short quote, "comment": one sentence}}] (every plan item)
-}}
-Plan rules: "done" = run/used and reported; "changed" = something different was done instead (set effect by comparing rigour);
-"not_done" = absent, only mentioned, or left for future work (effect null)."""
-    data = llm_service.complete_json(REVIEWER_SYSTEM, prompt, 4000)
-    if not isinstance(data.get("review"), dict) or not isinstance(data.get("journey"), dict):
-        raise llm_service.LLMUnavailable("LLM evaluation missing review or journey")
+Relate the paper to this history (information only — changing direction or plan is allowed). Return JSON:
+"summary": 2-3 sentences,
+"differentiation": {{"status": "clear"|"partial"|"unclear", "comment": how it positions itself against the closest papers}},
+"gaps": [{{"id": "G1", "status": "addressed"|"partial"|"not_addressed", "evidence"}}] (every gap),
+"research_questions": [{{"id": "RQ1", "status": "answered"|"partial"|"not_answered", "evidence"}}] (every RQ),
+"plan": [{{"id", "status": "done"|"changed"|"not_done", "effect": "stronger"|"similar"|"weaker"|null, "evidence", "comment"}}] (every plan item;
+  "done" = run/used and reported, "changed" = something different was done instead, "not_done" = absent or left for future work)"""
+    data = llm_service.complete_json(REVIEWER_SYSTEM, prompt, 3000)
+    if not isinstance(data.get("plan", []), list):
+        raise llm_service.LLMUnavailable("LLM comparison malformed")
     return data
 
 
-def _fallback_judge(history: dict, sections: list[dict], body: str, checks: dict, refs: dict, repro: list[dict]) -> dict:
-    """Without an LLM: review scores estimated from the deterministic checks, journey by keyword matching."""
-    present = {s["key"] for s in sections}
-    repro_share = sum(r["ok"] for r in repro) / len(repro)
-    cited = refs["related_coverage"][:5]
-    cited_share = sum(c["cited"] for c in cited) / len(cited) if cited else 0
-    visuals = min(1, (checks["figures"] + checks["tables"]) / 3)
-    note = "Estimated from the paper's structure (LLM unavailable)."
-    review = {
-        "contribution": {"score": round(4 + 3 * ("related" in present) + 3 * cited_share, 1), "comment": note},
-        "methodology": {"score": round(min(10, 3 + 2 * ("method" in present) + 2 * ("experiments" in present) + 3 * repro_share), 1), "comment": note},
-        "results": {"score": round(2 + 3 * ("results" in present) + 2 * visuals + 3 * repro[-1]["ok"], 1), "comment": note},
-        "clarity": {"score": round(10 * (1 - len(checks["missing_sections"]) / len(REQUIRED)), 1), "comment": note},
-    }
+def _fallback_compare(history: dict, body: str, refs: dict) -> dict:
     words = _tokens(body)
 
     def coverage(text: str) -> float:
@@ -349,18 +414,16 @@ def _fallback_judge(history: dict, sections: list[dict], body: str, checks: dict
         return len(terms & words) / len(terms) if terms else 0.0
 
     level = lambda c, hi, mid, lo: hi if c >= 0.6 else mid if c >= 0.35 else lo  # noqa: E731
+    cited = refs["related_coverage"][:5]
+    cited_share = sum(c["cited"] for c in cited) / len(cited) if cited else 0
     return {
-        "review": review, "summary": "Evaluated without the LLM; the scores are estimates from the structure of the paper.",
-        "strengths": [], "fixes": [],
-        "journey": {
-            "summary": "Matched with keywords because the LLM is unavailable; check the statuses yourself.",
-            "differentiation": {"status": "clear" if cited_share >= 0.6 else "partial" if cited_share else "unclear",
-                                "comment": f"{round(cited_share * 100)}% of the closest papers are cited."},
-            "gaps": [{"id": g["id"], "status": level(coverage(g["title"] + " " + g["description"]), "addressed", "partial", "not_addressed"), "evidence": ""} for g in history["gaps"]],
-            "research_questions": [{"id": q["id"], "status": level(coverage(q["question"]), "answered", "partial", "not_answered"), "evidence": ""} for q in history["rqs"]],
-            "plan": [{"id": i["id"], "status": "done" if coverage(i["label"][:200]) >= 0.6 else "not_done", "effect": None, "evidence": "",
-                      "comment": f"{round(coverage(i['label'][:200]) * 100)}% of its key terms appear in the paper."} for i in history["plan"]],
-        },
+        "summary": "Matched with keywords because the LLM is unavailable; check the statuses yourself.",
+        "differentiation": {"status": "clear" if cited_share >= 0.6 else "partial" if cited_share else "unclear",
+                            "comment": f"{round(cited_share * 100)}% of the closest papers are cited."},
+        "gaps": [{"id": g["id"], "status": level(coverage(g["title"] + " " + g["description"]), "addressed", "partial", "not_addressed")} for g in history["gaps"]],
+        "research_questions": [{"id": q["id"], "status": level(coverage(q["question"]), "answered", "partial", "not_answered")} for q in history["rqs"]],
+        "plan": [{"id": i["id"], "status": "done" if coverage(i["label"][:200]) >= 0.6 else "not_done", "effect": None,
+                  "comment": f"{round(coverage(i['label'][:200]) * 100)}% of its key terms appear in the paper."} for i in history["plan"]],
     }
 
 
@@ -381,45 +444,84 @@ def _merge(rows: list[dict], judged: list, allowed: tuple, default: str, extra=(
     return out
 
 
-def _score(review: dict, checks: dict, refs: dict, repro: list[dict]) -> dict:
+def _clean_analysis(a: dict) -> dict:
+    items = [{"type": _pick(i.get("type"), ITEM_TYPES, "objective"), "text": str(i.get("text") or "")[:300],
+              "where_stated": str(i.get("where_stated") or ""), "status": _pick(i.get("status"), ("answered", "partial", "not_answered"), "not_answered"),
+              "where_answered": str(i.get("where_answered") or ""), "evidence": str(i.get("evidence") or "")[:400], "comment": str(i.get("comment") or "")[:300]}
+             for i in a.get("items") or [] if isinstance(i, dict) and i.get("text")]
+    claims = [{"claim": str(c.get("claim") or "")[:300], "source": _pick(c.get("source"), ("abstract", "conclusion"), "abstract"),
+               "status": _pick(c.get("status"), ("supported", "partial", "unsupported"), "partial"), "evidence": str(c.get("evidence") or "")[:400]}
+              for c in a.get("claims") or [] if isinstance(c, dict) and c.get("claim")]
+    raw = a.get("consistency") or {}
+    consistency = [{"key": k, "label": label, "status": _pick((raw.get(k) or {}).get("status"), ("pass", "warn", "fail"), "warn"),
+                    "comment": str((raw.get(k) or {}).get("comment") or "")} for k, label in CONSISTENCY]
+    return {"items": items, "claims": claims, "consistency": consistency}
+
+
+def analysis_counts(analysis: dict) -> dict:
+    half = lambda rows, full, part: sum(1 if r["status"] == full else 0.5 if r["status"] == part else 0 for r in rows)  # noqa: E731
+    return {"items": [half(analysis["items"], "answered", "partial"), len(analysis["items"])],
+            "claims": [half(analysis["claims"], "supported", "partial"), len(analysis["claims"])],
+            "consistency": [half(analysis["consistency"], "pass", "warn"), len(analysis["consistency"])]}
+
+
+def _score(analysis: dict, review: dict, checks: dict, refs: dict, repro: list[dict]) -> dict:
+    counts = analysis_counts(analysis)
+    share = lambda pair, empty: pair[0] / pair[1] if pair[1] else empty  # noqa: E731
     structure = max(0.0, 1 - len(checks["missing_sections"]) / len(REQUIRED)
                     - (0.1 if not (100 <= checks["abstract_words"] <= 350) else 0)
                     - (0.1 if not checks["abstract_has_numbers"] else 0))
+
+    def judged(key: str) -> tuple[float, str]:
+        item = review.get(key) if isinstance(review.get(key), dict) else {}
+        try:
+            return max(0.0, min(10.0, float(item.get("score", 0)))) / 10, str(item.get("comment") or "")
+        except (TypeError, ValueError):
+            return 0.0, ""
+
     cited = refs["related_coverage"][:5]
     cited_share = sum(c["cited"] for c in cited) / len(cited) if cited else 0
     ref_ok = max(0.0, min(1.0, refs["count"] / 10) - (0.3 if refs["missing"] else 0))
-    parts = []
-    for key, name, weight in CRITERIA:
-        item = review.get(key) if isinstance(review.get(key), dict) else {}
-        try:
-            value = max(0.0, min(10.0, float(item.get("score", 0)))) / 10
-        except (TypeError, ValueError):
-            value = 0.0
-        if key == "clarity":  # half judged, half measured
-            value = 0.5 * value + 0.5 * structure
-        parts.append({"key": key, "name": name, "score": round(value * weight, 1), "max": weight, "comment": str(item.get("comment") or "")})
-    parts.append({"key": "references", "name": "References & related work", "max": 10,
-                  "score": round(10 * (0.5 * ref_ok + 0.5 * cited_share), 1),
-                  "comment": f"{refs['count']} references; {sum(c['cited'] for c in cited)} of the {len(cited)} closest papers cited."})
-    parts.append({"key": "reproducibility", "name": "Reproducibility", "max": 15,
-                  "score": round(15 * sum(r["ok"] for r in repro) / len(repro), 1),
-                  "comment": f"{sum(r['ok'] for r in repro)} of {len(repro)} checklist items found."})
-    total = round(sum(p["score"] for p in parts), 1)
+    contribution, c_note = judged("contribution")
+    methodology, m_note = judged("methodology")
+    clarity, cl_note = judged("clarity")
+    n = counts
+    parts = [
+        ("questions", "Questions & aims answered", share(n["items"], 0.5), 20,
+         f"{n['items'][0]:g} of {n['items'][1]} stated questions, aims, hypotheses and contributions delivered." if n["items"][1]
+         else "The paper does not state clear research questions or aims."),
+        ("claims", "Claims supported by results", share(n["claims"], 0.5), 15, f"{n['claims'][0]:g} of {n['claims'][1]} main claims backed by the results."),
+        ("consistency", "Internal consistency", share(n["consistency"], 0), 10, f"{n['consistency'][0]:g} of {n['consistency'][1]} consistency checks passed."),
+        ("methodology", "Methodology", methodology, 15, m_note),
+        ("contribution", "Contribution & novelty", contribution, 10, c_note),
+        ("clarity", "Clarity & structure", 0.5 * clarity + 0.5 * structure, 10, cl_note),
+        ("references", "References & related work", 0.5 * ref_ok + 0.5 * cited_share, 10,
+         f"{refs['count']} references; {sum(c['cited'] for c in cited)} of the {len(cited)} closest papers cited."),
+        ("reproducibility", "Reproducibility", sum(r["ok"] for r in repro) / len(repro), 10,
+         f"{sum(r['ok'] for r in repro)} of {len(repro)} checklist items found."),
+    ]
+    rows = [{"key": k, "name": name, "score": round(v * w, 1), "max": w, "comment": c} for k, name, v, w, c in parts]
+    total = round(sum(r["score"] for r in rows), 1)
     band = "Ready for review" if total >= 75 else "Needs revision" if total >= 55 else "Major revision"
-    return {"total": total, "band": band, "parts": parts}
+    return {"total": total, "band": band, "parts": rows}
 
 
-def _rule_fixes(checks: dict, refs: dict, repro: list[dict]) -> list[dict]:
+def _rule_fixes(analysis: dict, checks: dict, refs: dict, repro: list[dict]) -> list[dict]:
     fixes = []
+    for i in analysis["items"]:
+        if i["status"] == "not_answered":
+            fixes.append({"priority": "high", "section": "Results", "issue": f"Not answered: {i['text'][:120]}",
+                          "fix": "Answer it with results, or remove it from the introduction / abstract."})
+    for c in analysis["claims"]:
+        if c["status"] == "unsupported":
+            fixes.append({"priority": "high", "section": c["source"].title(), "issue": f"Claim not supported by the results: {c['claim'][:120]}",
+                          "fix": "Support it with a result or tone it down."})
     for k in checks["missing_sections"]:
         fixes.append({"priority": "high" if k in ("results", "method", "experiments") else "medium", "section": SECTION_NAMES[k],
                       "issue": f"No {SECTION_NAMES[k].lower()} section was found", "fix": f"Add a clearly titled {SECTION_NAMES[k]} section."})
     if refs["missing"]:
         fixes.append({"priority": "high", "section": "References", "issue": f"Citations without a reference entry: {', '.join(refs['missing'][:6])}",
                       "fix": "Add the missing entries to the reference list or correct the citation numbers."})
-    if checks["unsupported_claim_count"]:
-        fixes.append({"priority": "medium", "section": "Results", "issue": f"{checks['unsupported_claim_count']} strong claims have no number or citation",
-                      "fix": "Back every claim such as 'significantly better' with a result, a statistical test or a citation."})
     missing_repro = [r["label"].lower() for r in repro if not r["ok"]]
     if missing_repro:
         fixes.append({"priority": "low", "section": "Experiments", "issue": "Reproducibility details missing: " + "; ".join(missing_repro),
@@ -438,12 +540,16 @@ def evaluate(project: dict, filename: str, data: bytes, note: str) -> dict:
 
     method, llm_note = "llm", None
     try:
-        judged = _llm_judge(project, history, sections, note)
+        raw = _llm_analyse(sections)
     except llm_service.LLMUnavailable as e:
-        judged = _fallback_judge(history, sections, body, checks, refs, repro)
+        raw = _fallback_analyse(sections, body, checks)
         method, llm_note = "heuristic", str(e)
+    try:
+        j = _llm_compare(project, history, sections, note) if method == "llm" else _fallback_compare(history, body, refs)
+    except llm_service.LLMUnavailable:
+        j = _fallback_compare(history, body, refs)
 
-    j = judged["journey"]
+    analysis = _clean_analysis(raw)
     diff = j.get("differentiation") if isinstance(j.get("differentiation"), dict) else {}
     plan_rows = _merge(history["plan"], j.get("plan"), ("done", "changed", "not_done"), "not_done", extra=("effect", "comment"))
     for r in plan_rows:
@@ -461,15 +567,16 @@ def evaluate(project: dict, filename: str, data: bytes, note: str) -> dict:
     order = {"high": 0, "medium": 1, "low": 2}
     llm_fixes = [{"priority": _pick(f.get("priority"), tuple(order), "medium"), "section": str(f.get("section") or ""),
                   "issue": str(f.get("issue") or ""), "fix": str(f.get("fix") or "")}
-                 for f in judged.get("fixes") or [] if isinstance(f, dict) and f.get("issue")]
-    fixes = sorted(llm_fixes + _rule_fixes(checks, refs, repro), key=lambda f: order[f["priority"]])[:10]
+                 for f in raw.get("fixes") or [] if isinstance(f, dict) and f.get("issue")]
+    fixes = sorted(llm_fixes + _rule_fixes(analysis, checks, refs, repro), key=lambda f: order[f["priority"]])[:10]
 
     return {
         "file": {"name": filename[:200], "size": len(data), "pages": pages, "words": checks["words"]},
         "change_note": note,
-        "score": _score(judged["review"], checks, refs, repro),
-        "summary": str(judged.get("summary") or ""),
-        "strengths": [str(s) for s in judged.get("strengths") or []][:4],
+        "analysis": analysis,
+        "score": _score(analysis, raw.get("review") or {}, checks, refs, repro),
+        "summary": str(raw.get("summary") or ""),
+        "strengths": [str(s) for s in raw.get("strengths") or []][:4],
         "fixes": fixes,
         "journey": journey,
         "outline": [{"key": s["key"], "title": SECTION_NAMES.get(s["key"], s["title"]), "words": _words(s["text"])} for s in sections],
@@ -482,18 +589,10 @@ def evaluate(project: dict, filename: str, data: bytes, note: str) -> dict:
     }
 
 
-def journey_counts(journey: dict) -> dict:
-    count = lambda rows, full, half=None: sum(1 if r["status"] == full else 0.5 if r["status"] == half else 0 for r in rows)  # noqa: E731
-    return {"gaps": [count(journey["gaps"], "addressed", "partial"), len(journey["gaps"])],
-            "questions": [count(journey["research_questions"], "answered", "partial"), len(journey["research_questions"])],
-            "plan": [count(journey["plan"], "done"), len(journey["plan"])],
-            "changed": sum(r["status"] == "changed" for r in journey["plan"])}
-
-
 def draft_summary(paper: dict, draft: int) -> dict | None:
     """Compact record of a previous draft, kept so revisions can be compared."""
-    if "score" not in paper:  # evaluated by an earlier version of this stage
+    if "analysis" not in paper:  # evaluated by an earlier version of this stage
         return None
     return {"draft": draft, "file": paper["file"]["name"], "evaluated_at": paper["evaluated_at"],
             "score": paper["score"]["total"], "band": paper["score"]["band"],
-            "parts": {p["key"]: p["score"] for p in paper["score"]["parts"]}, "journey": journey_counts(paper["journey"])}
+            "parts": {p["key"]: p["score"] for p in paper["score"]["parts"]}, "counts": analysis_counts(paper["analysis"])}

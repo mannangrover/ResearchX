@@ -13,9 +13,15 @@ const PLAN = { done: ["Done", "chip-ok"], changed: ["Changed", "chip-accent"], n
 const EFFECT = { stronger: ["stronger", "chip-ok"], similar: ["similar rigour", ""], weaker: ["weaker", "chip-warn"] };
 const DIFF = { clear: ["Clearly positioned", "chip-ok"], partial: ["Partly positioned", "chip-warn"], unclear: ["Not positioned", "chip-warn"] };
 
+const ANSWERED = { answered: ["Answered", "chip-ok"], partial: ["Partly", "chip-warn"], not_answered: ["Not answered", "chip-danger"] };
+const CLAIM = { supported: ["Supported", "chip-ok"], partial: ["Partly", "chip-warn"], unsupported: ["Unsupported", "chip-danger"] };
+const CHECK = { pass: ["check", "ok"], warn: ["alert", "warn"], fail: ["x", "fail"] };
+const ITEM_TYPE = { research_question: "Research question", objective: "Aim", hypothesis: "Hypothesis", contribution: "Contribution" };
+
 const SECTIONS = [
-  ["review", "Review", "gauge"],
-  ["journey", "Research journey", "layers"],
+  ["analysis", "Paper analysis", "search"],
+  ["score", "Score & fixes", "gauge"],
+  ["journey", "Compared with project", "layers"],
   ["checks", "Checks", "check"],
 ];
 
@@ -40,6 +46,15 @@ function readBase64(file) {
 
 // "2 of 3", allowing halves for partial matches
 const ratio = ([got, total]) => `${Number.isInteger(got) ? got : got.toFixed(1)} of ${total}`;
+
+function analysisCounts(a) {
+  const count = (rows, full, half) => rows.reduce((n, r) => n + (r.status === full ? 1 : r.status === half ? 0.5 : 0), 0);
+  return {
+    items: [count(a.items, "answered", "partial"), a.items.length],
+    claims: [count(a.claims, "supported", "partial"), a.claims.length],
+    consistency: [a.consistency.filter((c) => c.status === "pass").length, a.consistency.length],
+  };
+}
 
 function journeyCounts(j) {
   const count = (rows, full, half) => rows.reduce((n, r) => n + (r.status === full ? 1 : r.status === half ? 0.5 : 0), 0);
@@ -134,11 +149,80 @@ function UploadForm({ busy, revision, onSubmit, onCancel }) {
   );
 }
 
-function Review({ paper }) {
-  const drafts = paper.drafts || [];
+function Analysis({ paper }) {
+  const a = paper.analysis;
   return (
     <>
       {paper.summary && <p className="paper-summary">{paper.summary}</p>}
+
+      <div>
+        <h3 className="sub-title">
+          <Icon name="lightbulb" size={15} /> What the paper sets out to do — and whether it does
+        </h3>
+        {a.items.length ? (
+          <ul className="journey-rows analysis-rows">
+            {a.items.map((i, n) => (
+              <li key={n}>
+                <span>
+                  <span className="item-type">{ITEM_TYPE[i.type]}</span>
+                  {i.text}
+                  <span className="small muted block">
+                    {i.status !== "not_answered" && i.where_answered ? `Answered in ${i.where_answered}. ` : ""}
+                    {i.comment}
+                  </span>
+                  {i.evidence && <q className="small evidence">{i.evidence}</q>}
+                </span>
+                <Chip map={ANSWERED} value={i.status} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <Alert kind="warn">The paper does not state clear research questions, aims or contributions. Add them to the introduction.</Alert>
+        )}
+      </div>
+
+      <div>
+        <h3 className="sub-title">
+          <Icon name="target" size={15} /> Are the main claims backed by the results?
+        </h3>
+        <ul className="journey-rows">
+          {a.claims.map((c, n) => (
+            <li key={n}>
+              <span>
+                <span className="item-type">{c.source === "abstract" ? "Abstract" : "Conclusion"}</span>
+                <q>{c.claim}</q>
+                {c.evidence && <span className="small muted block">{c.evidence}</span>}
+              </span>
+              <Chip map={CLAIM} value={c.status} />
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div>
+        <h3 className="sub-title">
+          <Icon name="check" size={15} /> Internal consistency
+        </h3>
+        <ul className="consistency">
+          {a.consistency.map((c) => (
+            <li key={c.key} className={CHECK[c.status][1]}>
+              <Icon name={CHECK[c.status][0]} size={15} />
+              <div>
+                <strong>{c.label}</strong>
+                {c.comment && <span className="small muted">{c.comment}</span>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+}
+
+function Quality({ paper }) {
+  const drafts = paper.drafts || [];
+  return (
+    <>
       <ul className="criteria">
         {paper.score.parts.map((p) => (
           <li key={p.key}>
@@ -204,10 +288,10 @@ function Review({ paper }) {
                   Paper score
                 </th>
                 <th scope="col" className="num">
-                  Gaps addressed
+                  Questions answered
                 </th>
                 <th scope="col" className="num">
-                  Plan done
+                  Claims supported
                 </th>
               </tr>
             </thead>
@@ -217,8 +301,8 @@ function Review({ paper }) {
                   <th scope="row">Draft {d.draft}</th>
                   <td className="wrap">{d.file}</td>
                   <td className="num">{d.score.toFixed(1)}</td>
-                  <td className="num">{ratio(d.journey.gaps)}</td>
-                  <td className="num">{d.journey.plan[1] ? ratio(d.journey.plan) : "—"}</td>
+                  <td className="num">{ratio(d.counts.items)}</td>
+                  <td className="num">{ratio(d.counts.claims)}</td>
                 </tr>
               ))}
               <tr className="row-current">
@@ -227,8 +311,8 @@ function Review({ paper }) {
                 <td className="num">
                   {paper.score.total.toFixed(1)} <Delta value={paper.score.total - drafts.at(-1).score} />
                 </td>
-                <td className="num">{ratio(journeyCounts(paper.journey).gaps)}</td>
-                <td className="num">{paper.journey.plan.length ? ratio(journeyCounts(paper.journey).plan) : "—"}</td>
+                <td className="num">{ratio(analysisCounts(paper.analysis).items)}</td>
+                <td className="num">{ratio(analysisCounts(paper.analysis).claims)}</td>
               </tr>
             </tbody>
           </table>
@@ -252,9 +336,19 @@ function JourneyStep({ stage, title, children }) {
 
 function Journey({ paper }) {
   const j = paper.journey;
+  const c = journeyCounts(j);
   const closest = paper.references.related_coverage.slice(0, 3);
   return (
     <>
+      <p className="small muted">
+        For information only: how the paper relates to what ResearchX found earlier in this project. It does not change the
+        paper score, and changing direction or plan is allowed.
+      </p>
+      <div className="tags">
+        <span className="tag">Gaps addressed: {ratio(c.gaps)}</span>
+        <span className="tag">Project questions answered: {ratio(c.questions)}</span>
+        <span className="tag">Plan done: {c.plan[1] ? `${ratio(c.plan)} · ${c.changed} changed` : "no plan"}</span>
+      </div>
       {j.summary && <p className="paper-summary">{j.summary}</p>}
       <ol className="journey">
         <JourneyStep stage={3} title="Closest related work">
@@ -409,9 +503,9 @@ function Checks({ paper }) {
 
 export default function PaperPanel({ project, running, disabled, onRun }) {
   const paper = project.paper;
-  const outdated = paper && !paper.score; // evaluated by an earlier version of this stage
+  const outdated = paper && !paper.analysis; // evaluated by an earlier version of this stage
   const [uploading, setUploading] = useState(false);
-  const [section, setSection] = useState("review");
+  const [section, setSection] = useState("analysis");
 
   const submit = async (body) => {
     if (await onRun(body)) setUploading(false);
@@ -422,7 +516,7 @@ export default function PaperPanel({ project, running, disabled, onRun }) {
       <StageCard
         stage={8}
         title="Paper evaluation"
-        description="Upload the paper you wrote. ResearchX reviews it on its own merits, then shows how it relates to your project's history: the closest papers, research gaps, research questions and experiment plan."
+        description="Upload the paper you wrote. ResearchX analyses the paper itself: are the questions, aims and contributions it states actually answered, are its claims backed by its results, and is it consistent. It also shows how the paper relates to the rest of this project."
       >
         {outdated && <Alert kind="info">This paper was evaluated with an earlier version of this stage. Upload it again to see the new evaluation.</Alert>}
         <UploadForm busy={running} onSubmit={submit} />
@@ -431,7 +525,7 @@ export default function PaperPanel({ project, running, disabled, onRun }) {
   }
 
   const s = paper.score;
-  const c = journeyCounts(paper.journey);
+  const c = analysisCounts(paper.analysis);
   return (
     <StageCard
       stage={8}
@@ -457,19 +551,19 @@ export default function PaperPanel({ project, running, disabled, onRun }) {
           <span className={`small ${BAND_CLASS[s.band]}`}>{s.band}</span>
         </div>
         <div className="paper-score">
-          <span className="small muted">Gaps addressed</span>
-          <strong>{ratio(c.gaps)}</strong>
-          <span className="small muted">from stage 5</span>
+          <span className="small muted">Questions & aims answered</span>
+          <strong>{c.items[1] ? ratio(c.items) : "—"}</strong>
+          <span className="small muted">stated by the paper</span>
         </div>
         <div className="paper-score">
-          <span className="small muted">Questions answered</span>
-          <strong>{ratio(c.questions)}</strong>
-          <span className="small muted">from stage 6</span>
+          <span className="small muted">Claims supported</span>
+          <strong>{ratio(c.claims)}</strong>
+          <span className="small muted">abstract & conclusion</span>
         </div>
         <div className="paper-score">
-          <span className="small muted">Plan done</span>
-          <strong>{c.plan[1] ? ratio(c.plan) : "—"}</strong>
-          <span className="small muted">{c.plan[1] ? `${c.changed} changed · stage 7` : "no plan"}</span>
+          <span className="small muted">Consistency checks</span>
+          <strong>{ratio(c.consistency)}</strong>
+          <span className="small muted">passed</span>
         </div>
       </div>
       <p className="small muted paper-file">
@@ -493,7 +587,8 @@ export default function PaperPanel({ project, running, disabled, onRun }) {
         ))}
       </div>
       <div id="paper-section" role="tabpanel" aria-labelledby={`paper-tab-${section}`} className="plan-section">
-        {section === "review" && <Review paper={paper} />}
+        {section === "analysis" && <Analysis paper={paper} />}
+        {section === "score" && <Quality paper={paper} />}
         {section === "journey" && <Journey paper={paper} />}
         {section === "checks" && <Checks paper={paper} />}
       </div>
