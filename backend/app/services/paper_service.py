@@ -1,19 +1,21 @@
 """Stage 8 — Paper evaluation.
 
-The student implements the stage 7 plan, writes the paper, and uploads it
-(PDF, Word, LaTeX, Markdown or text). ResearchX does not write the paper; it
-checks it:
+The student implements the research (ideally following the stage 7 plan),
+writes the paper and uploads it (PDF, Word, LaTeX, Markdown or text).
+ResearchX does not write the paper; it evaluates it in two separate parts:
 
-  * Plan compliance (mandatory): every hypothesis, experiment, dataset,
-    baseline, metric and ablation of the stage 7 plan is classified as
-    followed / improved (a justified, at-least-as-rigorous change) /
-    changed (unjustified deviation) / missing.
-  * Research questions answered, hypotheses supported / refuted.
-  * Structure, claims and statistics, reproducibility checklist.
-  * References: citation consistency and coverage of the closest related work.
+  1. Review — the paper on its own merits: contribution, methodology,
+     results, clarity, references and reproducibility -> a paper score.
+     Following or not following the plan does not change this score.
+  2. Research journey — how the paper relates to the project's history:
+     differentiation from the closest papers (stage 3), research gaps
+     addressed (stage 5), research questions answered (stage 6) and what was
+     done / changed / not done from the experiment plan (stage 7), with
+     whether each change made the work stronger or weaker. Informational.
 
-Text checks are deterministic; the plan / RQ judgement uses the LLM with a
-keyword-matching fallback. Only the evaluation is stored, not the paper text.
+Text checks are deterministic; the judgements use the LLM with a fallback
+estimated from the deterministic checks. Only the evaluation is stored, not
+the paper text.
 """
 import html
 import io
@@ -56,19 +58,19 @@ REPRO_CHECKS = [
 
 CLAIM_WORDS = r"significant(?:ly)?|state[- ]of[- ]the[- ]art|outperform\w*|novel|first to|superior|dramatic(?:ally)?|substantial(?:ly)?"
 
-STATUS_WEIGHT = {"followed": 1.0, "improved": 1.0, "changed": 0.4, "missing": 0.0}
-VERDICTS = {
-    "follows": "Follows the plan",
-    "justify": "Deviations need justification",
-    "not_following": "Does not follow the plan",
-}
+CRITERIA = [  # (key, name, weight) — LLM-judged part of the paper score
+    ("contribution", "Contribution & novelty", 20),
+    ("methodology", "Methodology", 20),
+    ("results", "Results & evidence", 20),
+    ("clarity", "Clarity & structure", 15),
+]
 
-EVALUATOR_SYSTEM = (
-    "You are ResearchX's paper evaluator. You check a student's paper against the experiment plan they "
-    "committed to. Be strict and evidence-based: quote or point to the paper for every judgement. "
-    "A change from the plan counts as 'improved' ONLY if the paper or the student's note justifies it and the "
-    "new choice is at least as rigorous (e.g. a stronger baseline, a larger or more standard dataset, an extra metric). "
-    "Changes that weaken the evaluation, or are not explained, are 'changed'. Respond with JSON only."
+REVIEWER_SYSTEM = (
+    "You are ResearchX's paper evaluator for student research papers. First judge the paper on its own merits, "
+    "like a fair conference reviewer. Then relate it to the project's history (closest papers, research gaps, "
+    "research questions, experiment plan) as information for the student: changing the plan is allowed, so judge "
+    "whether each change made the work stronger or weaker instead of penalising it. Quote or point to the paper "
+    "for every judgement. Respond with JSON only."
 )
 
 
@@ -254,8 +256,10 @@ def reproducibility(body: str) -> list[dict]:
     return out
 
 
-# ------------------------------------------------------------------ plan items
-def plan_items(plan: dict) -> list[dict]:
+# ------------------------------------------------------------------ project history the paper is compared with
+def plan_items(plan: dict | None) -> list[dict]:
+    if not plan:
+        return []
     items = [{"id": h["id"], "kind": "Hypothesis", "label": h["statement"]} for h in plan["hypotheses"]]
     items += [{"id": e["id"], "kind": "Experiment", "label": f"{e['title']}: {e['setup']}"} for e in plan["experiments"]]
     items += [{"id": f"D{i}", "kind": "Dataset", "label": d["name"]} for i, d in enumerate(plan["datasets"], 1)]
@@ -271,138 +275,155 @@ def research_questions(project: dict) -> list[dict]:
     return [{"id": f"RQ{i}", "question": q} for i, q in enumerate(rqs, 1)]
 
 
+def research_gaps(project: dict) -> list[dict]:
+    return [{"id": f"G{i}", "title": g["title"], "description": g.get("description", "")}
+            for i, g in enumerate(project["score"].get("gaps", []), 1)]
+
+
 def _paper_excerpt(sections: list[dict], limit: int = 20000) -> str:
-    budget = {"abstract": 2000, "front": 1500, "introduction": 2500, "method": 4000, "experiments": 4500,
-              "results": 4500, "discussion": 2000, "conclusion": 1800}
+    budget = {"abstract": 2000, "front": 1500, "introduction": 2500, "related": 1500, "method": 3500,
+              "experiments": 4000, "results": 4000, "discussion": 1800, "conclusion": 1500}
     parts = [f"## {SECTION_NAMES.get(s['key'], s['title'])}\n{s['text'][:budget[s['key']]]}" for s in sections if s["key"] in budget]
     return "\n\n".join(parts)[:limit]
 
 
-def _llm_judge(project: dict, items: list[dict], rqs: list[dict], sections: list[dict], note: str) -> dict:
-    plan = project["plan"]
-    listing = "\n".join(f"{i['id']} [{i['kind']}]: {i['label'][:300]}" for i in items)
-    rq_list = "\n".join(f"{q['id']}: {q['question']}" for q in rqs)
-    prompt = f"""EXPERIMENT PLAN the student committed to (objective: {plan['objective']}):
-{listing}
-
-RESEARCH QUESTIONS:
-{rq_list or '(none)'}
-
-STUDENT'S NOTE ON CHANGES FROM THE PLAN: {note or '(none given)'}
+# ------------------------------------------------------------------ judgement (LLM, with a fallback)
+def _llm_judge(project: dict, history: dict, sections: list[dict], note: str) -> dict:
+    papers = "\n".join(f"- {p['title']} ({p.get('year')})" for p in project["literature"]["papers"][:5])
+    gaps = "\n".join(f"{g['id']}: {g['title']} — {g['description'][:200]}" for g in history["gaps"])
+    rqs = "\n".join(f"{q['id']}: {q['question']}" for q in history["rqs"])
+    plan = "\n".join(f"{i['id']} [{i['kind']}]: {i['label'][:250]}" for i in history["plan"]) or "(no experiment plan was made)"
+    prompt = f"""PROJECT HISTORY (what ResearchX produced before the paper was written)
+CLOSEST RELATED PAPERS (stage 3):
+{papers}
+RESEARCH GAPS (stage 5):
+{gaps or '(none)'}
+RESEARCH QUESTIONS (stage 6):
+{rqs or '(none)'}
+EXPERIMENT PLAN (stage 7):
+{plan}
+STUDENT'S NOTE ON CHANGES: {note or '(none)'}
 
 PAPER (excerpts by section):
 {_paper_excerpt(sections)}
 
-Evaluate the paper. Rules: a Hypothesis or Experiment is 'followed' only if the paper actually RUNS it and REPORTS
-its results; merely stating or describing it (or deferring it to future work) is 'missing'. A dataset, baseline or
-metric is 'followed' only if it is used in the reported results.
 Return JSON:
-"items": [{{"id": plan item id, "status": "followed"|"improved"|"changed"|"missing", "evidence": short quote or section reference, "comment": one sentence}}] — one entry for EVERY plan item,
-"hypotheses": [{{"id": "H1", "outcome": "supported"|"refuted"|"inconclusive"|"not_reported", "evidence": short quote}}],
-"research_questions": [{{"id": "RQ1", "status": "answered"|"partial"|"missing", "evidence": short quote}}],
-"summary": 3-4 sentences on how well the paper delivers the plan and its overall quality,
+"review": {{"contribution": {{"score": 0-10, "comment": one sentence}}, "methodology": {{...}}, "results": {{...}}, "clarity": {{...}}}}
+  — judge the paper ONLY on its own merits; following or changing the plan must not affect these scores,
+"summary": 3-4 sentences judging the paper itself,
 "strengths": [2-4 short strengths],
-"fixes": [{{"priority": "high"|"medium"|"low", "section": section name, "issue": "...", "fix": concrete action}}] (3-8, most important first)"""
-    data = llm_service.complete_json(EVALUATOR_SYSTEM, prompt, 3500)
-    if not isinstance(data.get("items"), list):
-        raise llm_service.LLMUnavailable("LLM evaluation missing plan items")
+"fixes": [{{"priority": "high"|"medium"|"low", "section": section name, "issue": "...", "fix": concrete action}}] (3-6, most important first),
+"journey": {{
+  "summary": 2-3 sentences on how the paper relates to the project's history,
+  "differentiation": {{"status": "clear"|"partial"|"unclear", "comment": how it positions itself against the closest papers}},
+  "gaps": [{{"id": "G1", "status": "addressed"|"partial"|"not_addressed", "evidence": short quote}}] (every gap),
+  "research_questions": [{{"id": "RQ1", "status": "answered"|"partial"|"not_answered", "evidence": short quote}}] (every RQ),
+  "plan": [{{"id": plan item id, "status": "done"|"changed"|"not_done", "effect": "stronger"|"similar"|"weaker"|null, "evidence": short quote, "comment": one sentence}}] (every plan item)
+}}
+Plan rules: "done" = run/used and reported; "changed" = something different was done instead (set effect by comparing rigour);
+"not_done" = absent, only mentioned, or left for future work (effect null)."""
+    data = llm_service.complete_json(REVIEWER_SYSTEM, prompt, 4000)
+    if not isinstance(data.get("review"), dict) or not isinstance(data.get("journey"), dict):
+        raise llm_service.LLMUnavailable("LLM evaluation missing review or journey")
     return data
 
 
-def _keyword_judge(items: list[dict], rqs: list[dict], sections: list[dict], body: str) -> dict:
-    """Fallback without an LLM: an item counts as followed when most of its key terms appear in the paper."""
+def _fallback_judge(history: dict, sections: list[dict], body: str, checks: dict, refs: dict, repro: list[dict]) -> dict:
+    """Without an LLM: review scores estimated from the deterministic checks, journey by keyword matching."""
+    present = {s["key"] for s in sections}
+    repro_share = sum(r["ok"] for r in repro) / len(repro)
+    cited = refs["related_coverage"][:5]
+    cited_share = sum(c["cited"] for c in cited) / len(cited) if cited else 0
+    visuals = min(1, (checks["figures"] + checks["tables"]) / 3)
+    note = "Estimated from the paper's structure (LLM unavailable)."
+    review = {
+        "contribution": {"score": round(4 + 3 * ("related" in present) + 3 * cited_share, 1), "comment": note},
+        "methodology": {"score": round(min(10, 3 + 2 * ("method" in present) + 2 * ("experiments" in present) + 3 * repro_share), 1), "comment": note},
+        "results": {"score": round(2 + 3 * ("results" in present) + 2 * visuals + 3 * repro[-1]["ok"], 1), "comment": note},
+        "clarity": {"score": round(10 * (1 - len(checks["missing_sections"]) / len(REQUIRED)), 1), "comment": note},
+    }
     words = _tokens(body)
-    results_text = _section(sections, "results", "discussion", "conclusion").lower()
 
     def coverage(text: str) -> float:
         terms = _tokens(text)
         return len(terms & words) / len(terms) if terms else 0.0
 
-    judged = []
-    for it in items:
-        c = coverage(it["label"][:200])
-        judged.append({"id": it["id"], "status": "followed" if c >= 0.6 else "missing",
-                       "evidence": "", "comment": f"{round(c * 100)}% of its key terms appear in the paper (keyword check)."})
-    hyps = [{"id": it["id"], "outcome": "inconclusive" if coverage(it["label"]) >= 0.5 and results_text else "not_reported", "evidence": ""}
-            for it in items if it["kind"] == "Hypothesis"]
-    rq = [{"id": q["id"], "status": "answered" if coverage(q["question"]) >= 0.6 else "partial" if coverage(q["question"]) >= 0.35 else "missing", "evidence": ""}
-          for q in rqs]
-    return {"items": judged, "hypotheses": hyps, "research_questions": rq,
-            "summary": "Evaluated with keyword matching because the LLM is unavailable; review the statuses manually.",
-            "strengths": [], "fixes": []}
+    level = lambda c, hi, mid, lo: hi if c >= 0.6 else mid if c >= 0.35 else lo  # noqa: E731
+    return {
+        "review": review, "summary": "Evaluated without the LLM; the scores are estimates from the structure of the paper.",
+        "strengths": [], "fixes": [],
+        "journey": {
+            "summary": "Matched with keywords because the LLM is unavailable; check the statuses yourself.",
+            "differentiation": {"status": "clear" if cited_share >= 0.6 else "partial" if cited_share else "unclear",
+                                "comment": f"{round(cited_share * 100)}% of the closest papers are cited."},
+            "gaps": [{"id": g["id"], "status": level(coverage(g["title"] + " " + g["description"]), "addressed", "partial", "not_addressed"), "evidence": ""} for g in history["gaps"]],
+            "research_questions": [{"id": q["id"], "status": level(coverage(q["question"]), "answered", "partial", "not_answered"), "evidence": ""} for q in history["rqs"]],
+            "plan": [{"id": i["id"], "status": "done" if coverage(i["label"][:200]) >= 0.6 else "not_done", "effect": None, "evidence": "",
+                      "comment": f"{round(coverage(i['label'][:200]) * 100)}% of its key terms appear in the paper."} for i in history["plan"]],
+        },
+    }
 
 
-# ------------------------------------------------------------------ scoring
-def _compliance(items: list[dict], judged: dict) -> dict:
-    by_id = {j.get("id"): j for j in judged.get("items", []) if isinstance(j, dict)}
-    rows = []
-    for it in items:
-        j = by_id.get(it["id"], {})
-        status = j.get("status") if j.get("status") in STATUS_WEIGHT else "missing"
-        rows.append({**it, "status": status, "evidence": str(j.get("evidence") or "")[:400], "comment": str(j.get("comment") or "")[:400]})
-    counts = {s: sum(r["status"] == s for r in rows) for s in STATUS_WEIGHT}
-    coverage = sum(STATUS_WEIGHT[r["status"]] for r in rows) / len(rows) if rows else 0.0
-    core = [r for r in rows if r["kind"] in ("Hypothesis", "Experiment")]
-    if any(r["status"] == "missing" for r in core) or coverage < 0.5:
-        verdict = "not_following"
-    elif counts["changed"] or counts["missing"] or coverage < 0.8:
-        verdict = "justify"
-    else:
-        verdict = "follows"
-    return {"items": rows, "counts": counts, "coverage": round(coverage, 3), "verdict": verdict, "verdict_label": VERDICTS[verdict]}
+# ------------------------------------------------------------------ assembling the result
+def _pick(value, allowed, default):
+    return value if value in allowed else default
 
 
-def _readiness(compliance: dict, hyps: list[dict], rqs: list[dict], checks: dict, refs: dict, repro: list[dict]) -> dict:
-    rq_score = sum({"answered": 1, "partial": 0.5}.get(q["status"], 0) for q in rqs) / len(rqs) if rqs else 1.0
-    hyp_score = sum(h["outcome"] != "not_reported" for h in hyps) / len(hyps) if hyps else 1.0
-    structure = 1 - len(checks["missing_sections"]) / len(REQUIRED)
-    structure -= 0.1 if not (100 <= checks["abstract_words"] <= 350) else 0
-    structure -= 0.1 if not checks["abstract_has_numbers"] else 0
-    cited_related = sum(c["cited"] for c in refs["related_coverage"][:5]) / max(1, min(5, len(refs["related_coverage"])))
-    ref_ok = 1.0 if refs["count"] >= 10 else refs["count"] / 10
-    ref_ok -= 0.3 if refs["missing"] else 0
-    parts = [
-        ("compliance", "Plan compliance", compliance["coverage"], 35),
-        ("questions", "Research questions answered", rq_score, 15),
-        ("hypotheses", "Hypotheses reported", hyp_score, 10),
-        ("structure", "Structure & abstract", max(0.0, structure), 15),
-        ("references", "References & related work", max(0.0, 0.5 * ref_ok + 0.5 * cited_related), 10),
-        ("reproducibility", "Reproducibility", sum(r["ok"] for r in repro) / len(repro), 15),
-    ]
-    rows = [{"key": k, "name": n, "score": round(v * w, 1), "max": w} for k, n, v, w in parts]
-    total = round(sum(r["score"] for r in rows), 1)
-    capped = compliance["verdict"] == "not_following" and total > 49
-    if capped:
-        total = 49.0
-    band = "Ready for review" if total >= 75 else "Needs revision" if total >= 50 else "Major gaps"
-    return {"total": total, "band": band, "parts": rows, "capped_by_plan": capped}
+def _merge(rows: list[dict], judged: list, allowed: tuple, default: str, extra=()) -> list[dict]:
+    by_id = {j.get("id"): j for j in judged or [] if isinstance(j, dict)}
+    out = []
+    for r in rows:
+        j = by_id.get(r["id"], {})
+        row = {**r, "status": _pick(j.get("status"), allowed, default), "evidence": str(j.get("evidence") or "")[:400]}
+        for key in extra:
+            row[key] = j.get(key)
+        out.append(row)
+    return out
 
 
-def _rule_fixes(compliance: dict, checks: dict, refs: dict, repro: list[dict]) -> list[dict]:
+def _score(review: dict, checks: dict, refs: dict, repro: list[dict]) -> dict:
+    structure = max(0.0, 1 - len(checks["missing_sections"]) / len(REQUIRED)
+                    - (0.1 if not (100 <= checks["abstract_words"] <= 350) else 0)
+                    - (0.1 if not checks["abstract_has_numbers"] else 0))
+    cited = refs["related_coverage"][:5]
+    cited_share = sum(c["cited"] for c in cited) / len(cited) if cited else 0
+    ref_ok = max(0.0, min(1.0, refs["count"] / 10) - (0.3 if refs["missing"] else 0))
+    parts = []
+    for key, name, weight in CRITERIA:
+        item = review.get(key) if isinstance(review.get(key), dict) else {}
+        try:
+            value = max(0.0, min(10.0, float(item.get("score", 0)))) / 10
+        except (TypeError, ValueError):
+            value = 0.0
+        if key == "clarity":  # half judged, half measured
+            value = 0.5 * value + 0.5 * structure
+        parts.append({"key": key, "name": name, "score": round(value * weight, 1), "max": weight, "comment": str(item.get("comment") or "")})
+    parts.append({"key": "references", "name": "References & related work", "max": 10,
+                  "score": round(10 * (0.5 * ref_ok + 0.5 * cited_share), 1),
+                  "comment": f"{refs['count']} references; {sum(c['cited'] for c in cited)} of the {len(cited)} closest papers cited."})
+    parts.append({"key": "reproducibility", "name": "Reproducibility", "max": 15,
+                  "score": round(15 * sum(r["ok"] for r in repro) / len(repro), 1),
+                  "comment": f"{sum(r['ok'] for r in repro)} of {len(repro)} checklist items found."})
+    total = round(sum(p["score"] for p in parts), 1)
+    band = "Ready for review" if total >= 75 else "Needs revision" if total >= 55 else "Major revision"
+    return {"total": total, "band": band, "parts": parts}
+
+
+def _rule_fixes(checks: dict, refs: dict, repro: list[dict]) -> list[dict]:
     fixes = []
-    for r in compliance["items"]:
-        if r["status"] == "missing" and r["kind"] in ("Hypothesis", "Experiment"):
-            fixes.append({"priority": "high", "section": "Experiments", "issue": f"{r['id']} from the plan is not in the paper",
-                          "fix": f"Run and report {r['id']} ({r['label'][:90]}), or explain in the change note why a better alternative replaced it."})
-        elif r["status"] == "changed":
-            fixes.append({"priority": "high", "section": "Method", "issue": f"{r['id']} ({r['kind'].lower()}) deviates from the plan without justification",
-                          "fix": "Justify the change in the paper and the change note, showing it is at least as rigorous, or follow the plan."})
     for k in checks["missing_sections"]:
         fixes.append({"priority": "high" if k in ("results", "method", "experiments") else "medium", "section": SECTION_NAMES[k],
                       "issue": f"No {SECTION_NAMES[k].lower()} section was found", "fix": f"Add a clearly titled {SECTION_NAMES[k]} section."})
     if refs["missing"]:
         fixes.append({"priority": "high", "section": "References", "issue": f"Citations without a reference entry: {', '.join(refs['missing'][:6])}",
                       "fix": "Add the missing entries to the reference list or correct the citation numbers."})
-    uncited_close = [c["title"] for c in refs["related_coverage"][:3] if not c["cited"]]
-    if uncited_close:
-        fixes.append({"priority": "medium", "section": "Related work", "issue": "Closest related work is not cited: " + "; ".join(t[:60] for t in uncited_close),
-                      "fix": "Cite and discuss these papers, and compare against them where possible."})
     if checks["unsupported_claim_count"]:
         fixes.append({"priority": "medium", "section": "Results", "issue": f"{checks['unsupported_claim_count']} strong claims have no number or citation",
                       "fix": "Back every claim such as 'significantly better' with a result, a statistical test or a citation."})
-    for r in repro:
-        if not r["ok"]:
-            fixes.append({"priority": "low", "section": "Experiments", "issue": f"Reproducibility: {r['label'].lower()} — not found", "fix": "Add this detail."})
+    missing_repro = [r["label"].lower() for r in repro if not r["ok"]]
+    if missing_repro:
+        fixes.append({"priority": "low", "section": "Experiments", "issue": "Reproducibility details missing: " + "; ".join(missing_repro),
+                      "fix": "Add these details so others can repeat the experiments."})
     return fixes
 
 
@@ -413,61 +434,66 @@ def evaluate(project: dict, filename: str, data: bytes, note: str) -> dict:
     checks = quality_checks(sections, body)
     refs = analyse_references(sections, body, project["literature"]["papers"])
     repro = reproducibility(body)
-    items = plan_items(project["plan"])
-    rqs = research_questions(project)
+    history = {"gaps": research_gaps(project), "rqs": research_questions(project), "plan": plan_items(project.get("plan"))}
 
     method, llm_note = "llm", None
     try:
-        judged = _llm_judge(project, items, rqs, sections, note)
+        judged = _llm_judge(project, history, sections, note)
     except llm_service.LLMUnavailable as e:
-        judged = _keyword_judge(items, rqs, sections, body)
+        judged = _fallback_judge(history, sections, body, checks, refs, repro)
         method, llm_note = "heuristic", str(e)
 
-    statements = {h["id"]: h["statement"] for h in project["plan"]["hypotheses"]}
-    outcomes = {h.get("id"): h for h in judged.get("hypotheses", []) if isinstance(h, dict)}
-    hyps = [{"id": hid, "statement": st,
-             "outcome": outcomes.get(hid, {}).get("outcome") if outcomes.get(hid, {}).get("outcome") in ("supported", "refuted", "inconclusive", "not_reported") else "not_reported",
-             "evidence": str(outcomes.get(hid, {}).get("evidence") or "")[:400]} for hid, st in statements.items()]
-    # A hypothesis whose outcome is not reported was not tested, whatever the item judgement said
-    untested = {h["id"] for h in hyps if h["outcome"] == "not_reported"}
-    for j in judged.get("items", []):
-        if isinstance(j, dict) and j.get("id") in untested and j.get("status") != "missing":
-            j["status"] = "missing"
-            j["comment"] = "Stated but no result is reported for it. " + str(j.get("comment") or "")
-    compliance = _compliance(items, judged)
-    rq_judged = {q.get("id"): q for q in judged.get("research_questions", []) if isinstance(q, dict)}
-    rq_rows = [{**q, "status": rq_judged.get(q["id"], {}).get("status") if rq_judged.get(q["id"], {}).get("status") in ("answered", "partial", "missing") else "missing",
-                "evidence": str(rq_judged.get(q["id"], {}).get("evidence") or "")[:400]} for q in rqs]
+    j = judged["journey"]
+    diff = j.get("differentiation") if isinstance(j.get("differentiation"), dict) else {}
+    plan_rows = _merge(history["plan"], j.get("plan"), ("done", "changed", "not_done"), "not_done", extra=("effect", "comment"))
+    for r in plan_rows:
+        r["effect"] = _pick(r["effect"], ("stronger", "similar", "weaker"), None) if r["status"] == "changed" else None
+        r["comment"] = str(r["comment"] or "")[:400]
+    journey = {
+        "summary": str(j.get("summary") or ""),
+        "differentiation": {"status": _pick(diff.get("status"), ("clear", "partial", "unclear"), "unclear"), "comment": str(diff.get("comment") or "")},
+        "gaps": _merge(history["gaps"], j.get("gaps"), ("addressed", "partial", "not_addressed"), "not_addressed"),
+        "research_questions": _merge(history["rqs"], j.get("research_questions"), ("answered", "partial", "not_answered"), "not_answered"),
+        "plan": plan_rows,
+        "has_plan": bool(history["plan"]),
+    }
 
-    llm_fixes = [{"priority": f.get("priority") if f.get("priority") in ("high", "medium", "low") else "medium",
-                  "section": str(f.get("section") or ""), "issue": str(f.get("issue") or ""), "fix": str(f.get("fix") or "")}
-                 for f in judged.get("fixes", []) if isinstance(f, dict) and f.get("issue")]
     order = {"high": 0, "medium": 1, "low": 2}
-    fixes = sorted(_rule_fixes(compliance, checks, refs, repro) + llm_fixes, key=lambda f: order[f["priority"]])[:14]
+    llm_fixes = [{"priority": _pick(f.get("priority"), tuple(order), "medium"), "section": str(f.get("section") or ""),
+                  "issue": str(f.get("issue") or ""), "fix": str(f.get("fix") or "")}
+                 for f in judged.get("fixes") or [] if isinstance(f, dict) and f.get("issue")]
+    fixes = sorted(llm_fixes + _rule_fixes(checks, refs, repro), key=lambda f: order[f["priority"]])[:10]
 
     return {
         "file": {"name": filename[:200], "size": len(data), "pages": pages, "words": checks["words"]},
         "change_note": note,
+        "score": _score(judged["review"], checks, refs, repro),
+        "summary": str(judged.get("summary") or ""),
+        "strengths": [str(s) for s in judged.get("strengths") or []][:4],
+        "fixes": fixes,
+        "journey": journey,
         "outline": [{"key": s["key"], "title": SECTION_NAMES.get(s["key"], s["title"]), "words": _words(s["text"])} for s in sections],
         "checks": checks,
         "references": refs,
         "reproducibility": repro,
-        "compliance": compliance,
-        "hypotheses": hyps,
-        "research_questions": rq_rows,
-        "summary": str(judged.get("summary") or ""),
-        "strengths": [str(s) for s in judged.get("strengths") or []][:4],
-        "fixes": fixes,
-        "readiness": _readiness(compliance, hyps, rq_rows, checks, refs, repro),
         "method": method,
         "note": llm_note,
         "evaluated_at": _now(),
     }
 
 
-def draft_summary(paper: dict, draft: int) -> dict:
+def journey_counts(journey: dict) -> dict:
+    count = lambda rows, full, half=None: sum(1 if r["status"] == full else 0.5 if r["status"] == half else 0 for r in rows)  # noqa: E731
+    return {"gaps": [count(journey["gaps"], "addressed", "partial"), len(journey["gaps"])],
+            "questions": [count(journey["research_questions"], "answered", "partial"), len(journey["research_questions"])],
+            "plan": [count(journey["plan"], "done"), len(journey["plan"])],
+            "changed": sum(r["status"] == "changed" for r in journey["plan"])}
+
+
+def draft_summary(paper: dict, draft: int) -> dict | None:
     """Compact record of a previous draft, kept so revisions can be compared."""
+    if "score" not in paper:  # evaluated by an earlier version of this stage
+        return None
     return {"draft": draft, "file": paper["file"]["name"], "evaluated_at": paper["evaluated_at"],
-            "readiness": paper["readiness"]["total"], "band": paper["readiness"]["band"],
-            "coverage": paper["compliance"]["coverage"], "verdict": paper["compliance"]["verdict_label"],
-            "parts": {p["key"]: p["score"] for p in paper["readiness"]["parts"]}}
+            "score": paper["score"]["total"], "band": paper["score"]["band"],
+            "parts": {p["key"]: p["score"] for p in paper["score"]["parts"]}, "journey": journey_counts(paper["journey"])}

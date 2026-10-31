@@ -19,9 +19,9 @@ This repository implements stages 1–8 of the 10-stage workflow in the SRS, gro
 | 3 | Literature Analysis (OpenAlex, Semantic Scholar, arXiv + semantic ranking) | ✅ Built |
 | 4 | Research Opportunity Score (6 transparent dimensions) | ✅ Built |
 | 5 | Research Gap Discovery | ✅ Built |
-| 6 | Interactive Refinement (advisor chat → editable refined proposal → approve → new **version** of the same project: profile and papers are reused, only the ROS is re-computed; every version can be viewed or made the working version) | ✅ Built |
+| 6 | Interactive Refinement (advisor chat → editable refined proposal → approve → new **version** of the same project: profile and papers are reused, only the ROS is re-computed; every version keeps its own data and can be opened and worked on separately) | ✅ Built |
 | 7 | Experiment Planning (hypotheses traced to RQs, datasets, baselines, metrics, experiments, ablations, timeline fitted to the time budget, risks; Markdown export) | ✅ Built |
-| 8 | Paper Evaluation (the student implements the plan, writes the paper and uploads it as PDF/DOCX/TeX/MD; mandatory plan-compliance check, research questions, hypotheses, structure, claims, references, reproducibility, readiness score, draft history) | ✅ Built |
+| 8 | Paper Evaluation (the student does the research, writes the paper and uploads it as PDF/DOCX/TeX/MD; **Review**: paper score on its own merits — contribution, methodology, results, clarity, references, reproducibility; **Research journey**: closest papers cited, stage 5 gaps addressed, stage 6 questions answered, stage 7 plan items done / changed (stronger or weaker) / not done — informational, changing the plan is allowed; draft history) | ✅ Built |
 | 9–10 | Reviewer Simulation, Publication Guidance | Next milestones |
 
 ## Architecture
@@ -129,7 +129,7 @@ cd backend && python -m scripts.smoke_test https://github.com/qodo-ai/pr-agent
 | `POST` | `/api/projects/{id}/refine/propose` | 6 — draft the refined proposal from the discussion |
 | `PUT` | `/api/projects/{id}/refine/proposal` | 6 — save edits / approve (`{"proposal": {...}, "approved": true}`) |
 | `POST` | `/api/projects/{id}/refine/apply` | 6 — create a new version from the approved proposal and re-compute its ROS |
-| `POST` | `/api/projects/{id}/versions/{n}/switch` | make stored version `n` the working version (the current one is kept) |
+| `POST` | `/api/projects/{id}/versions/{n}/switch` | open version `n` to work on (the previously open version is stored intact) |
 | `POST` | `/api/projects/{id}/plan` | 7 — experiment plan (`{"weeks": 12, "team_size": 2, "compute": "cpu"\|"single_gpu"\|"multi_gpu", "notes": ""}`) |
 | `POST` | `/api/projects/{id}/paper` | 8 — evaluate the uploaded paper (`{"filename", "content_base64", "change_note"}`) |
 

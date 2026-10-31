@@ -182,18 +182,14 @@ async def plan(pid: str, body: PlanOptions | None = None, user: User = Depends(c
 @router.post("/{pid}/paper")
 async def paper(pid: str, body: PaperUpload, user: User = Depends(current_user)):
     store = get_store(user)
-    project = _get_or_404(store, pid)
-    if not project.get("plan"):
-        raise HTTPException(409, "Create the experiment plan (stage 7) first: the paper is evaluated against it")
+    project = _scored_or_409(store, pid)  # the plan (stage 7) is optional: the paper is compared with it when it exists
     try:
         data = base64.b64decode(body.content_base64, validate=True)
     except (binascii.Error, ValueError):
         raise HTTPException(422, "The uploaded file could not be decoded")
     result = await run_in_threadpool(paper_service.evaluate, project, body.filename, data, body.change_note.strip())
     previous = project.get("paper")
-    if previous:
-        drafts = previous.get("drafts", [])
-        result["drafts"] = [*drafts, paper_service.draft_summary(previous, len(drafts) + 1)]
-    else:
-        result["drafts"] = []
+    drafts = [d for d in (previous or {}).get("drafts", []) if d.get("score") is not None]
+    summary = paper_service.draft_summary(previous, len(drafts) + 1) if previous else None
+    result["drafts"] = [*drafts, summary] if summary else drafts
     return store.save_stage(pid, "paper", result, stage=8)

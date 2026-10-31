@@ -55,19 +55,19 @@ export function shownVersion(project) {
   return { number, parent: list.find((v) => v.version === shown?.parent) };
 }
 
-export function VersionSwitcher({ project, viewing, onView }) {
+export function VersionSwitcher({ project, viewing, onOpen }) {
   const { list, current } = versionsOf(project);
   if (list.length < 2) return null;
   return (
-    <label className="version-switcher">
+    <label className="version-switcher" title="Open a version. Each version keeps its own analysis, refinement, plan and paper.">
       <Icon name="layers" size={14} />
-      <span className="sr-only">Project version</span>
-      <select value={viewing ?? current} onChange={(e) => onView(Number(e.target.value) === current ? null : Number(e.target.value))}>
+      <span className="sr-only">Open project version</span>
+      <select value={viewing ?? current} onChange={(e) => onOpen(Number(e.target.value))}>
         {[...list].reverse().map((v) => (
           <option key={v.version} value={v.version}>
             v{v.version} · {v.label || "Version"}
             {totalOf(v) != null ? ` · ${fmt(totalOf(v))}` : ""}
-            {v.working ? " · working" : ""}
+            {v.legacy ? " · summary only" : ""}
           </option>
         ))}
       </select>
@@ -75,8 +75,8 @@ export function VersionSwitcher({ project, viewing, onView }) {
   );
 }
 
-// Stage 1 tab: every version of the project, with a way to open any of them
-export function VersionHistory({ project, viewing, onView }) {
+// Stage 1 tab: every version of the project; any of them can be opened and worked on
+export function VersionHistory({ project, viewing, onOpen, busy }) {
   const { list, current } = versionsOf(project);
   if (list.length < 2) return null;
   const shown = viewing ?? current;
@@ -85,9 +85,10 @@ export function VersionHistory({ project, viewing, onView }) {
       <h3 className="sub-title">
         <Icon name="layers" size={15} /> Versions of this project
       </h3>
+      <p className="small muted">Each version keeps its own analysis, refinement, plan and paper. Open one to continue working on it.</p>
       <ol className="version-list">
         {list.map((v) => (
-          <li key={v.version} className={`version ${v.working ? "is-current" : ""} ${v.version === shown ? "is-shown" : ""}`}>
+          <li key={v.version} className={`version ${v.version === shown ? "is-current" : ""}`}>
             <span className="version-tag">v{v.version}</span>
             <div className="version-main">
               <strong>{v.title}</strong>
@@ -100,13 +101,13 @@ export function VersionHistory({ project, viewing, onView }) {
                     <span className={BAND_CLASS[v.score.band]}>{fmt(totalOf(v))}</span>
                   </>
                 )}
-                {v.working ? " · working version" : v.saved_at ? ` · saved ${timeAgo(v.saved_at || v.replaced_at)}` : ""}
+                {v.version === shown ? " · open now" : ""}
                 {v.legacy ? " · summary only" : ""}
               </span>
             </div>
             {v.version !== shown && (
-              <button className="btn btn-ghost btn-sm" onClick={() => onView(v.working ? null : v.version)}>
-                {v.working ? "Back to Working" : "View"}
+              <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => onOpen(v.version)}>
+                {v.legacy ? "View Summary" : "Open"}
               </button>
             )}
           </li>
@@ -116,25 +117,20 @@ export function VersionHistory({ project, viewing, onView }) {
   );
 }
 
-// Banner shown while a stored version is open
-export function VersionBanner({ version, busy, onSwitch, onBack }) {
+// Banner shown while a summary-only (legacy) version is displayed
+export function VersionBanner({ version, onBack }) {
   return (
     <div className="alert alert-warn version-banner" role="status">
       <Icon name="layers" size={16} />
       <div>
         <strong>
-          Viewing v{version.version} · {version.label}
+          v{version.version} · {version.label}
         </strong>{" "}
-        — read-only. Make it the working version to continue from it; the current working version is kept.
+        was saved before full version snapshots existed, so only its summary can be shown.
       </div>
       <div className="version-banner-actions">
-        {!version.legacy && (
-          <button className="btn btn-primary btn-sm" disabled={busy} onClick={onSwitch}>
-            Make v{version.version} the Working Version
-          </button>
-        )}
         <button className="btn btn-ghost btn-sm" onClick={onBack}>
-          Back to Working Version
+          Back to the Open Version
         </button>
       </div>
     </div>

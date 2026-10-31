@@ -6,34 +6,27 @@ import { Delta } from "./Versions";
 const ACCEPT = ".pdf,.docx,.tex,.md,.txt";
 const MAX_MB = 15;
 
-const STATUS = {
-  followed: ["Followed", "chip-ok"],
-  improved: ["Improved", "chip-accent"],
-  changed: ["Changed", "chip-warn"],
-  missing: ["Missing", "chip-danger"],
-};
-const OUTCOME = {
-  supported: ["Supported", "chip-ok"],
-  refuted: ["Refuted", "chip-warn"],
-  inconclusive: ["Inconclusive", ""],
-  not_reported: ["Not reported", "chip-danger"],
-};
-const RQ_STATUS = { answered: ["Answered", "chip-ok"], partial: ["Partly answered", "chip-warn"], missing: ["Not answered", "chip-danger"] };
-const VERDICT_KIND = { follows: "info", justify: "warn", not_following: "error" };
-const BAND_CLASS = { "Ready for review": "band-strong", "Needs revision": "band-limited", "Major gaps": "band-weak" };
+const BAND_CLASS = { "Ready for review": "band-strong", "Needs revision": "band-limited", "Major revision": "band-weak" };
+const GAP = { addressed: ["Addressed", "chip-ok"], partial: ["Partly", "chip-warn"], not_addressed: ["Not addressed", ""] };
+const RQ = { answered: ["Answered", "chip-ok"], partial: ["Partly", "chip-warn"], not_answered: ["Not answered", ""] };
+const PLAN = { done: ["Done", "chip-ok"], changed: ["Changed", "chip-accent"], not_done: ["Not done", ""] };
+const EFFECT = { stronger: ["stronger", "chip-ok"], similar: ["similar rigour", ""], weaker: ["weaker", "chip-warn"] };
+const DIFF = { clear: ["Clearly positioned", "chip-ok"], partial: ["Partly positioned", "chip-warn"], unclear: ["Not positioned", "chip-warn"] };
 
 const SECTIONS = [
-  ["overview", "Overview", "gauge"],
-  ["compliance", "Plan compliance", "check"],
-  ["questions", "Questions & hypotheses", "target"],
-  ["structure", "Structure & claims", "file"],
-  ["references", "References", "book"],
-  ["repro", "Reproducibility", "refresh"],
+  ["review", "Review", "gauge"],
+  ["journey", "Research journey", "layers"],
+  ["checks", "Checks", "check"],
 ];
 
-const Chip = ({ map, value }) => {
+const Chip = ({ map, value, prefix = "" }) => {
   const [label, cls] = map[value] || [value, ""];
-  return <span className={`chip ${cls}`}>{label}</span>;
+  return (
+    <span className={`chip ${cls}`}>
+      {prefix}
+      {label}
+    </span>
+  );
 };
 
 function readBase64(file) {
@@ -43,6 +36,19 @@ function readBase64(file) {
     reader.onerror = () => reject(new Error("Could not read the file"));
     reader.readAsDataURL(file);
   });
+}
+
+// "2 of 3", allowing halves for partial matches
+const ratio = ([got, total]) => `${Number.isInteger(got) ? got : got.toFixed(1)} of ${total}`;
+
+function journeyCounts(j) {
+  const count = (rows, full, half) => rows.reduce((n, r) => n + (r.status === full ? 1 : r.status === half ? 0.5 : 0), 0);
+  return {
+    gaps: [count(j.gaps, "addressed", "partial"), j.gaps.length],
+    questions: [count(j.research_questions, "answered", "partial"), j.research_questions.length],
+    plan: [count(j.plan, "done"), j.plan.length],
+    changed: j.plan.filter((r) => r.status === "changed").length,
+  };
 }
 
 function UploadForm({ busy, revision, onSubmit, onCancel }) {
@@ -90,7 +96,7 @@ function UploadForm({ busy, revision, onSubmit, onCancel }) {
         {file ? (
           <span>
             <strong>{file.name}</strong>
-            <span className="small muted"> · {(file.size / 1024 / 1024).toFixed(2)} MB — click to change</span>
+            <span className="small muted">{(file.size / 1024 / 1024).toFixed(2)} MB · click to change</span>
           </span>
         ) : (
           <span>
@@ -101,20 +107,16 @@ function UploadForm({ busy, revision, onSubmit, onCancel }) {
       </label>
       <div className="field">
         <label htmlFor="paper-note">
-          Changes from the stage 7 plan <span className="muted">(required if you deviated)</span>
+          Did you change anything from your plan? <span className="muted">(optional)</span>
         </label>
         <textarea
           id="paper-note"
           name="change_note"
-          rows={3}
+          rows={2}
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="e.g. Used ImageNet-pretrained ResNet-50 as an extra baseline because it is stronger than the planned one; replaced dataset X with Y because Y is the standard benchmark…"
+          placeholder="e.g. Added a stronger distillation baseline; skipped the thermal study because the device was unavailable…"
         />
-        <span className="help">
-          Your paper must implement the plan. A change is accepted only when it is explained and at least as rigorous as the
-          plan (a stronger baseline, a more standard dataset, an extra metric).
-        </span>
       </div>
       {error && <Alert kind="error">{error}</Alert>}
       <div className="form-actions">
@@ -132,349 +134,304 @@ function UploadForm({ busy, revision, onSubmit, onCancel }) {
   );
 }
 
-function Overview({ paper }) {
-  const r = paper.readiness;
+function Review({ paper }) {
   const drafts = paper.drafts || [];
-  const prev = drafts.at(-1);
   return (
     <>
-      {paper.summary && <p className="plan-objective">{paper.summary}</p>}
-      <div className="paper-parts">
-        {r.parts.map((p) => (
-          <div key={p.key} className="paper-part">
-            <div className="paper-part-head">
-              <span>{p.name}</span>
+      {paper.summary && <p className="paper-summary">{paper.summary}</p>}
+      <ul className="criteria">
+        {paper.score.parts.map((p) => (
+          <li key={p.key}>
+            <div className="criteria-head">
+              <strong>{p.name}</strong>
               <span className="tabular">
-                <strong>{p.score}</strong> / {p.max}
+                {p.score} <span className="muted">/ {p.max}</span>
               </span>
             </div>
             <div className="bar" aria-hidden="true">
               <span style={{ width: `${(p.score / p.max) * 100}%` }} />
             </div>
-          </div>
+            {p.comment && <span className="small muted">{p.comment}</span>}
+          </li>
         ))}
-      </div>
+      </ul>
 
-      {paper.strengths.length > 0 && (
+      <div className="grid-2">
         <div className="list-card">
           <h3 className="sub-title">
             <Icon name="star" size={15} /> Strengths
           </h3>
-          <ul className="check-list">
-            {paper.strengths.map((s) => (
-              <li key={s}>{s}</li>
-            ))}
-          </ul>
+          {paper.strengths.length ? (
+            <ul className="check-list">
+              {paper.strengths.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="small muted">No strengths listed.</p>
+          )}
         </div>
-      )}
-
-      <div>
-        <h3 className="sub-title">
-          <Icon name="alert" size={15} /> What to fix, most important first
-        </h3>
-        {paper.fixes.length ? (
-          <ol className="fix-list">
-            {paper.fixes.map((f, i) => (
-              <li key={i} className={`fix fix-${f.priority}`}>
-                <span className={`chip ${f.priority === "high" ? "chip-danger" : f.priority === "medium" ? "chip-warn" : ""}`}>{f.priority}</span>
-                <div>
-                  <strong>{f.issue}</strong>
-                  <span className="small muted">
-                    {f.section && `${f.section} · `}
-                    {f.fix}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="small muted">Nothing to fix was found.</p>
-        )}
+        <div className="list-card">
+          <h3 className="sub-title">
+            <Icon name="alert" size={15} /> What to improve
+          </h3>
+          {paper.fixes.length ? (
+            <ol className="fix-list">
+              {paper.fixes.slice(0, 6).map((f, i) => (
+                <li key={i}>
+                  <span className={`dot dot-${f.priority}`} title={`${f.priority} priority`} />
+                  <div>
+                    <strong>{f.issue}</strong>
+                    <span className="small muted">{f.fix}</span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="small muted">Nothing important to fix.</p>
+          )}
+        </div>
       </div>
 
       {drafts.length > 0 && (
-        <div>
-          <h3 className="sub-title">
-            <Icon name="layers" size={15} /> Drafts
-          </h3>
-          <div className="table-wrap">
-            <table className="compare-table">
-              <thead>
-                <tr>
-                  <th scope="col">Draft</th>
-                  <th scope="col">File</th>
-                  <th scope="col" className="num">
-                    Readiness
-                  </th>
-                  <th scope="col" className="num">
-                    Plan coverage
-                  </th>
-                  <th scope="col">Plan verdict</th>
+        <div className="table-wrap">
+          <table className="compare-table">
+            <thead>
+              <tr>
+                <th scope="col">Draft</th>
+                <th scope="col">File</th>
+                <th scope="col" className="num">
+                  Paper score
+                </th>
+                <th scope="col" className="num">
+                  Gaps addressed
+                </th>
+                <th scope="col" className="num">
+                  Plan done
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {drafts.map((d) => (
+                <tr key={d.draft}>
+                  <th scope="row">Draft {d.draft}</th>
+                  <td className="wrap">{d.file}</td>
+                  <td className="num">{d.score.toFixed(1)}</td>
+                  <td className="num">{ratio(d.journey.gaps)}</td>
+                  <td className="num">{d.journey.plan[1] ? ratio(d.journey.plan) : "—"}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {drafts.map((d) => (
-                  <tr key={d.draft}>
-                    <th scope="row">Draft {d.draft}</th>
-                    <td className="wrap">{d.file}</td>
-                    <td className="num">{d.readiness.toFixed(1)}</td>
-                    <td className="num">{Math.round(d.coverage * 100)}%</td>
-                    <td>{d.verdict}</td>
-                  </tr>
-                ))}
-                <tr className="row-current">
-                  <th scope="row">Draft {drafts.length + 1} (latest)</th>
-                  <td className="wrap">{paper.file.name}</td>
-                  <td className="num">
-                    {r.total.toFixed(1)} <Delta value={r.total - prev.readiness} />
-                  </td>
-                  <td className="num">{Math.round(paper.compliance.coverage * 100)}%</td>
-                  <td>{paper.compliance.verdict_label}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+              ))}
+              <tr className="row-current">
+                <th scope="row">Draft {drafts.length + 1} (latest)</th>
+                <td className="wrap">{paper.file.name}</td>
+                <td className="num">
+                  {paper.score.total.toFixed(1)} <Delta value={paper.score.total - drafts.at(-1).score} />
+                </td>
+                <td className="num">{ratio(journeyCounts(paper.journey).gaps)}</td>
+                <td className="num">{paper.journey.plan.length ? ratio(journeyCounts(paper.journey).plan) : "—"}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       )}
     </>
   );
 }
 
-function Compliance({ paper }) {
-  const c = paper.compliance;
+function JourneyStep({ stage, title, children }) {
+  return (
+    <li className="journey-step">
+      <span className="journey-stage">Stage {stage}</span>
+      <div className="journey-body">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    </li>
+  );
+}
+
+function Journey({ paper }) {
+  const j = paper.journey;
+  const closest = paper.references.related_coverage.slice(0, 3);
   return (
     <>
-      <div className="tags">
-        {Object.entries(STATUS).map(([k, [label, cls]]) => (
-          <span key={k} className={`chip ${cls}`}>
-            {label}: <strong>{c.counts[k]}</strong>
-          </span>
-        ))}
-      </div>
-      {paper.change_note && (
-        <p className="small muted">
-          <strong>Your change note:</strong> {paper.change_note}
-        </p>
-      )}
-      <div className="table-wrap">
-        <table className="compare-table">
-          <thead>
-            <tr>
-              <th scope="col">Plan item</th>
-              <th scope="col">Status</th>
-              <th scope="col">Evidence in the paper</th>
-            </tr>
-          </thead>
-          <tbody>
-            {c.items.map((it) => (
-              <tr key={it.id}>
-                <th scope="row" className="wrap">
-                  <span className="id-badge">{it.id}</span> <span className="small muted">{it.kind}</span>
-                  <span className="plan-item-label">{it.label}</span>
-                </th>
-                <td>
-                  <Chip map={STATUS} value={it.status} />
-                </td>
-                <td className="small">
-                  {it.evidence && <q>{it.evidence}</q>}
-                  {it.comment && <span className="muted block">{it.comment}</span>}
-                </td>
-              </tr>
+      {j.summary && <p className="paper-summary">{j.summary}</p>}
+      <ol className="journey">
+        <JourneyStep stage={3} title="Closest related work">
+          <div className="row-between">
+            <span className="small muted">{j.differentiation.comment}</span>
+            <Chip map={DIFF} value={j.differentiation.status} />
+          </div>
+          <ul className="journey-rows">
+            {closest.map((c) => (
+              <li key={c.title}>
+                <span>{c.title}</span>
+                <span className={`chip ${c.cited ? "chip-ok" : ""}`}>{c.cited ? "Cited" : "Not cited"}</span>
+              </li>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </ul>
+        </JourneyStep>
+
+        <JourneyStep stage={5} title="Research gaps">
+          <ul className="journey-rows">
+            {j.gaps.map((g) => (
+              <li key={g.id}>
+                <span>
+                  <b>{g.id}</b> {g.title}
+                </span>
+                <Chip map={GAP} value={g.status} />
+              </li>
+            ))}
+          </ul>
+        </JourneyStep>
+
+        <JourneyStep stage={6} title="Research questions">
+          <ul className="journey-rows">
+            {j.research_questions.map((q) => (
+              <li key={q.id}>
+                <span>
+                  <b>{q.id}</b> {q.question}
+                </span>
+                <Chip map={RQ} value={q.status} />
+              </li>
+            ))}
+          </ul>
+        </JourneyStep>
+
+        <JourneyStep stage={7} title="Experiment plan">
+          {!j.has_plan ? (
+            <p className="small muted">No experiment plan was made for this version, so there is nothing to compare.</p>
+          ) : (
+            <>
+              <p className="small muted">
+                Changing the plan is fine. Changes are rated by whether they made the work stronger or weaker.
+                {paper.change_note && (
+                  <>
+                    {" "}
+                    Your note: <q>{paper.change_note}</q>
+                  </>
+                )}
+              </p>
+              <ul className="journey-rows">
+                {j.plan.map((r) => (
+                  <li key={r.id}>
+                    <span>
+                      <b>{r.id}</b> <span className="muted">{r.kind}:</span> {r.label.length > 110 ? `${r.label.slice(0, 110)}…` : r.label}
+                      {r.comment && <span className="small muted block">{r.comment}</span>}
+                    </span>
+                    <span className="chips">
+                      <Chip map={PLAN} value={r.status} />
+                      {r.effect && <Chip map={EFFECT} value={r.effect} />}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </JourneyStep>
+      </ol>
     </>
   );
 }
 
-function Questions({ paper }) {
+function Checks({ paper }) {
+  const k = paper.checks;
+  const r = paper.references;
   return (
-    <div className="grid-2">
+    <div className="checks-grid">
       <div className="list-card">
         <h3 className="sub-title">
-          <Icon name="lightbulb" size={15} /> Research questions
+          <Icon name="file" size={15} /> Structure
         </h3>
-        <ul className="plan-items">
-          {paper.research_questions.map((q) => (
-            <li key={q.id}>
-              <span className="row-between">
-                <strong>{q.id}</strong> <Chip map={RQ_STATUS} value={q.status} />
-              </span>
-              <span>{q.question}</span>
-              {q.evidence && <q className="muted">{q.evidence}</q>}
+        <dl className="kv">
+          <dt>Words</dt>
+          <dd>{k.words.toLocaleString()}</dd>
+          <dt>Abstract</dt>
+          <dd>
+            {k.abstract_words} words · {k.abstract_has_numbers ? "reports results" : "no numbers"}
+          </dd>
+          <dt>Figures</dt>
+          <dd>
+            {k.figures} figures · {k.tables} tables
+          </dd>
+          <dt>Missing</dt>
+          <dd>{k.missing_sections.length ? k.missing_sections.join(", ") : "No standard section missing"}</dd>
+        </dl>
+      </div>
+      <div className="list-card">
+        <h3 className="sub-title">
+          <Icon name="book" size={15} /> References
+        </h3>
+        <dl className="kv">
+          <dt>Entries</dt>
+          <dd>
+            {r.count} · {r.style} style
+          </dd>
+          <dt>Problems</dt>
+          <dd>
+            {r.missing.length ? `cited but not listed: ${r.missing.join(", ")}` : "none found"}
+            {r.uncited.length > 0 && ` · listed but never cited: ${r.uncited.join(", ")}`}
+          </dd>
+        </dl>
+      </div>
+      <div className="list-card">
+        <h3 className="sub-title">
+          <Icon name="refresh" size={15} /> Reproducibility
+        </h3>
+        <ul className="repro-list">
+          {paper.reproducibility.map((x) => (
+            <li key={x.key} className={x.ok ? "ok" : "no"} title={x.evidence || "Not found in the paper"}>
+              <Icon name={x.ok ? "check" : "x"} size={14} />
+              <span>{x.label}</span>
             </li>
           ))}
         </ul>
       </div>
       <div className="list-card">
         <h3 className="sub-title">
-          <Icon name="flask" size={15} /> Hypotheses from the plan
+          <Icon name="alert" size={15} /> Claims without evidence ({k.unsupported_claim_count})
         </h3>
-        <ul className="plan-items">
-          {paper.hypotheses.map((h) => (
-            <li key={h.id}>
-              <span className="row-between">
-                <strong>{h.id}</strong> <Chip map={OUTCOME} value={h.outcome} />
-              </span>
-              <span>{h.statement}</span>
-              {h.evidence && <q className="muted">{h.evidence}</q>}
-            </li>
-          ))}
-        </ul>
-        <p className="small muted">A refuted hypothesis is a valid result. Only “not reported” counts against the paper.</p>
+        {k.unsupported_claims.length ? (
+          <ul className="plan-items">
+            {k.unsupported_claims.slice(0, 4).map((c) => (
+              <li key={c}>
+                <q>{c}</q>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="small muted">Every strong claim has a number or a citation.</p>
+        )}
       </div>
     </div>
   );
 }
 
-function Structure({ paper }) {
-  const k = paper.checks;
-  const facts = [
-    ["Words", k.words.toLocaleString()],
-    ["Abstract", `${k.abstract_words} words${k.abstract_has_numbers ? " · reports numbers" : " · no numbers"}`],
-    ["Figures", k.figures],
-    ["Tables", k.tables],
-  ];
-  return (
-    <>
-      <dl className="stats">
-        {facts.map(([label, value]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>{value}</dd>
-          </div>
-        ))}
-      </dl>
-      {k.missing_sections.length > 0 && <Alert kind="warn">Missing sections: {k.missing_sections.join(", ")}.</Alert>}
-      <div className="grid-2">
-        <div className="list-card">
-          <h3 className="sub-title">
-            <Icon name="file" size={15} /> Sections found
-          </h3>
-          <ol className="outline">
-            {paper.outline.map((o, i) => (
-              <li key={i}>
-                <span>{o.title}</span>
-                <span className="muted tabular">{o.words} words</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-        <div className="list-card">
-          <h3 className="sub-title">
-            <Icon name="alert" size={15} /> Claims without evidence ({k.unsupported_claim_count})
-          </h3>
-          {k.unsupported_claims.length ? (
-            <ul className="plan-items">
-              {k.unsupported_claims.map((c) => (
-                <li key={c}>
-                  <q>{c}</q>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="small muted">Every strong claim is backed by a number or a citation.</p>
-          )}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function References({ paper }) {
-  const r = paper.references;
-  return (
-    <>
-      <dl className="stats">
-        <div>
-          <dt>Reference entries</dt>
-          <dd>{r.count}</dd>
-        </div>
-        <div>
-          <dt>Citation style</dt>
-          <dd>{r.style}</dd>
-        </div>
-        <div>
-          <dt>Cited in the text</dt>
-          <dd>{r.cited}</dd>
-        </div>
-      </dl>
-      {r.missing.length > 0 && <Alert kind="error">Cited but not in the reference list: {r.missing.join(", ")}</Alert>}
-      {r.uncited.length > 0 && <Alert kind="warn">In the reference list but never cited: {r.uncited.join(", ")}</Alert>}
-      <div className="list-card">
-        <h3 className="sub-title">
-          <Icon name="book" size={15} /> Closest related work from stage 3
-        </h3>
-        <ul className="plan-items">
-          {r.related_coverage.map((c) => (
-            <li key={c.title} className="row-between">
-              <span>
-                {c.title} <span className="muted">({c.year || "n.d."})</span>
-              </span>
-              <span className={`chip ${c.cited ? "chip-ok" : "chip-warn"}`}>{c.cited ? "Cited" : "Not cited"}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </>
-  );
-}
-
-function Reproducibility({ paper }) {
-  return (
-    <ul className="repro-list">
-      {paper.reproducibility.map((r) => (
-        <li key={r.key} className={r.ok ? "ok" : "no"}>
-          <Icon name={r.ok ? "check" : "x"} size={15} />
-          <div>
-            <strong>{r.label}</strong>
-            <span className="small muted">{r.ok ? r.evidence : "Not found in the paper."}</span>
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export default function PaperPanel({ project, running, disabled, onRun }) {
   const paper = project.paper;
+  const outdated = paper && !paper.score; // evaluated by an earlier version of this stage
   const [uploading, setUploading] = useState(false);
-  const [section, setSection] = useState("overview");
+  const [section, setSection] = useState("review");
 
   const submit = async (body) => {
     if (await onRun(body)) setUploading(false);
   };
 
-  const intro = (
-    <ol className="paper-steps">
-      <li>
-        <strong>Implement</strong> the stage 7 experiment plan.
-      </li>
-      <li>
-        <strong>Write</strong> your paper.
-      </li>
-      <li>
-        <strong>Upload</strong> it here. ResearchX checks it against the plan and evaluates the whole paper.
-      </li>
-    </ol>
-  );
-
-  if (!paper) {
+  if (!paper || outdated) {
     return (
       <StageCard
         stage={8}
         title="Paper evaluation"
-        description="Your paper is evaluated against the experiment plan you committed to in stage 7 (mandatory), then for research-question coverage, structure, claims, references and reproducibility."
+        description="Upload the paper you wrote. ResearchX reviews it on its own merits, then shows how it relates to your project's history: the closest papers, research gaps, research questions and experiment plan."
       >
-        {intro}
+        {outdated && <Alert kind="info">This paper was evaluated with an earlier version of this stage. Upload it again to see the new evaluation.</Alert>}
         <UploadForm busy={running} onSubmit={submit} />
       </StageCard>
     );
   }
 
-  const r = paper.readiness;
-  const c = paper.compliance;
+  const s = paper.score;
+  const c = journeyCounts(paper.journey);
   return (
     <StageCard
       stage={8}
@@ -491,39 +448,34 @@ export default function PaperPanel({ project, running, disabled, onRun }) {
       {uploading && <UploadForm busy={running} revision onSubmit={submit} onCancel={() => setUploading(false)} />}
 
       <div className="paper-head">
-        <div className="paper-score">
-          <span className="small muted">Readiness</span>
-          <strong className={BAND_CLASS[r.band]}>{r.total.toFixed(1)}</strong>
-          <span className={`small ${BAND_CLASS[r.band]}`}>{r.band}</span>
+        <div className="paper-score main">
+          <span className="small muted">Paper score</span>
+          <strong className={BAND_CLASS[s.band]}>
+            {s.total.toFixed(1)}
+            <span className="kpi-unit"> / 100</span>
+          </strong>
+          <span className={`small ${BAND_CLASS[s.band]}`}>{s.band}</span>
         </div>
         <div className="paper-score">
-          <span className="small muted">Plan coverage</span>
-          <strong>{Math.round(c.coverage * 100)}%</strong>
-          <span className="small muted">
-            {c.counts.followed + c.counts.improved} of {c.items.length} items
-          </span>
+          <span className="small muted">Gaps addressed</span>
+          <strong>{ratio(c.gaps)}</strong>
+          <span className="small muted">from stage 5</span>
         </div>
-        <div className="paper-file">
-          <Icon name="file" size={16} />
-          <span>
-            <strong>{paper.file.name}</strong>
-            <span className="small muted">
-              {paper.file.pages ? `${paper.file.pages} pages · ` : ""}
-              {paper.file.words.toLocaleString()} words · draft {(paper.drafts || []).length + 1}
-            </span>
-          </span>
+        <div className="paper-score">
+          <span className="small muted">Questions answered</span>
+          <strong>{ratio(c.questions)}</strong>
+          <span className="small muted">from stage 6</span>
+        </div>
+        <div className="paper-score">
+          <span className="small muted">Plan done</span>
+          <strong>{c.plan[1] ? ratio(c.plan) : "—"}</strong>
+          <span className="small muted">{c.plan[1] ? `${c.changed} changed · stage 7` : "no plan"}</span>
         </div>
       </div>
-
-      <Alert kind={VERDICT_KIND[c.verdict]}>
-        <strong>{c.verdict_label}.</strong>{" "}
-        {c.verdict === "follows" && "The paper implements the stage 7 plan."}
-        {c.verdict === "justify" &&
-          "Some plan items were changed or left out. Explain each change in the change note and the paper, or follow the plan."}
-        {c.verdict === "not_following" &&
-          "Following the stage 7 plan is mandatory: a planned hypothesis or experiment is missing. Complete it, justify a better alternative, or regenerate the plan in stage 7 if you found a better approach."}
-        {r.capped_by_plan && " Readiness is capped at 49 until the plan is followed."}
-      </Alert>
+      <p className="small muted paper-file">
+        <Icon name="file" size={13} /> {paper.file.name} · {paper.file.pages ? `${paper.file.pages} pages · ` : ""}
+        {paper.file.words.toLocaleString()} words · draft {(paper.drafts || []).length + 1}
+      </p>
 
       <div className="subtabs" role="tablist" aria-label="Evaluation sections">
         {SECTIONS.map(([key, label, icon]) => (
@@ -541,12 +493,9 @@ export default function PaperPanel({ project, running, disabled, onRun }) {
         ))}
       </div>
       <div id="paper-section" role="tabpanel" aria-labelledby={`paper-tab-${section}`} className="plan-section">
-        {section === "overview" && <Overview paper={paper} />}
-        {section === "compliance" && <Compliance paper={paper} />}
-        {section === "questions" && <Questions paper={paper} />}
-        {section === "structure" && <Structure paper={paper} />}
-        {section === "references" && <References paper={paper} />}
-        {section === "repro" && <Reproducibility paper={paper} />}
+        {section === "review" && <Review paper={paper} />}
+        {section === "journey" && <Journey paper={paper} />}
+        {section === "checks" && <Checks paper={paper} />}
       </div>
     </StageCard>
   );

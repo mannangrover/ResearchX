@@ -15,7 +15,7 @@ import { LegacySummary, VersionBanner, VersionCompare, VersionHistory, VersionSw
 
 const STEPS = {
   apply: { stage: 4, label: "Creating the refined version: re-computing the Research Opportunity Score (profile and papers are reused)…" },
-  switch: { stage: 1, label: "Switching version…" },
+  switch: { stage: 1, label: "Opening the version…" },
   analyze: { stage: 2, label: "Analysing the project and repository…" },
   literature: { stage: 3, label: "Searching OpenAlex, Semantic Scholar and arXiv, then ranking papers…" },
   score: { stage: 4, label: "Computing the Research Opportunity Score and research gaps…" },
@@ -140,17 +140,19 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
 
   const applyRefinement = async () => {
     const next = Math.max(...versionsOf(project).list.map((v) => v.version)) + 1;
-    if (!confirm(`Create v${next} from the approved proposal? The current version stays available in this project's version list.`)) return;
+    if (!confirm(`Create v${next} from the approved proposal? The current version stays in this project and can be opened again from the version menu.`)) return;
     await run("apply", () => api.refineApply(id));
   };
 
-  const view = (n) => {
-    setViewing(n);
+  // Opening a version makes it the one you work on; the previously open version is stored intact
+  const openVersion = async (n) => {
     setError("");
-  };
-
-  const switchTo = async (n) => {
-    if (await run("switch", () => api.switchVersion(id, n))) setViewing(null);
+    const { list, current } = versionsOf(project);
+    if (n === current) return setViewing(null);
+    const target = list.find((v) => v.version === n);
+    if (target?.legacy) return setViewing(n); // summary only — can be shown, not opened
+    setViewing(null);
+    await run("switch", () => api.switchVersion(id, n));
   };
 
   const remove = async () => {
@@ -171,7 +173,7 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
     );
   }
 
-  // A stored version is shown read-only through the same tabs
+  // Only summary-only (legacy) versions are shown read-only; every other version is opened for real
   const shown = (viewing != null && viewOf(project, viewing)) || project;
   const stored = shown.__version;
   const readOnly = !!stored;
@@ -188,7 +190,7 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
         ) : (
           <p className="muted">No written idea — this project is analysed from its GitHub repository.</p>
         )}
-        <VersionHistory project={shown} viewing={viewing} onView={view} />
+        <VersionHistory project={shown} viewing={viewing} onOpen={openVersion} busy={!!running} />
       </StageCard>
     ),
     2: (
@@ -233,10 +235,10 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
     ) : (
       <Prerequisite stage={7} needs={4} onGo={selectTab} />
     ),
-    8: shown.plan ? (
+    8: shown.score ? (
       <PaperPanel project={shown} running={running === "paper"} disabled={busy} onRun={(body) => run("paper", () => api.paper(id, body))} />
     ) : (
-      <Prerequisite stage={8} needs={shown.score ? 7 : 4} onGo={selectTab} />
+      <Prerequisite stage={8} needs={shown.literature ? 4 : shown.profile ? 3 : 2} onGo={selectTab} />
     ),
   };
 
@@ -262,14 +264,14 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
           )}
         </div>
         <div className="project-head-actions">
-          <VersionSwitcher project={project} viewing={viewing} onView={view} />
+          <VersionSwitcher project={project} viewing={viewing} onOpen={openVersion} />
           <button className="btn btn-ghost btn-danger" onClick={remove} disabled={!!running}>
             <Icon name="trash" size={15} /> Delete
           </button>
         </div>
       </header>
 
-      {stored && <VersionBanner version={stored} busy={!!running} onSwitch={() => switchTo(stored.version)} onBack={() => view(null)} />}
+      {stored && <VersionBanner version={stored} onBack={() => setViewing(null)} />}
 
       {!stored?.legacy && <Overview project={shown} />}
 
