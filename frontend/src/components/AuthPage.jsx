@@ -9,7 +9,7 @@ const FEATURES = [
   ["target", "Gaps, questions & refinement", "Concrete research gaps and an advisor chat that turns them into a proposal."],
 ];
 
-const PIPELINE = ["Input", "Analysis", "Literature", "Score", "Gaps", "Refine"];
+const PIPELINE = ["Input", "Analysis", "Literature", "Score", "Gaps", "Refine", "Plan"];
 
 export default function AuthPage({ supabase, demo }) {
   const [mode, setMode] = useState("login"); // login | signup

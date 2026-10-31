@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -25,3 +27,10 @@ class RefineMessage(BaseModel):
 class ProposalUpdate(BaseModel):
     proposal: dict
     approved: bool = False
+
+
+class PlanOptions(BaseModel):
+    weeks: int = Field(12, ge=2, le=52)
+    team_size: int = Field(2, ge=1, le=10)
+    compute: Literal["cpu", "single_gpu", "multi_gpu"] = "single_gpu"
+    notes: str = Field("", max_length=1000)

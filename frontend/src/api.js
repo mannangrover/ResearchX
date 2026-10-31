@@ -50,5 +50,7 @@ export const api = {
   refineSaveProposal: (id, proposal, approved) =>
     request(`/projects/${id}/refine/proposal`, { method: "PUT", body: JSON.stringify({ proposal, approved }) }),
   refineReset: (id) => request(`/projects/${id}/refine`, { method: "DELETE" }),
-  refineSpinoff: (id) => request(`/projects/${id}/refine/spinoff`, { method: "POST" }),
+  refineApply: (id) => request(`/projects/${id}/refine/apply`, { method: "POST" }),
+  // Stage 7 — experiment planning
+  plan: (id, options) => request(`/projects/${id}/plan`, { method: "POST", body: JSON.stringify(options) }),
 };

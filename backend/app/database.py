@@ -1,8 +1,9 @@
 """SQLite persistence for projects.
 
 Each project row stores the user input plus the JSON output of every
-pipeline stage (profile, literature, score, refinement), so stages can be re-run
-independently and the UI can resume where the user left off.
+pipeline stage (profile, literature, score, refinement, plan), so stages can be
+re-run independently and the UI can resume where the user left off. `history`
+keeps a snapshot of every earlier version of a refined project.
 """
 import json
 import sqlite3
@@ -11,7 +12,8 @@ from datetime import datetime, timezone
 
 from .config import settings
 
-STAGE_COLUMNS = ("profile", "literature", "score", "refinement")
+STAGE_COLUMNS = ("profile", "literature", "score", "refinement", "plan")
+JSON_COLUMNS = (*STAGE_COLUMNS, "history")
 
 
 def _connect() -> sqlite3.Connection:
@@ -35,15 +37,18 @@ def init_db() -> None:
                 literature  TEXT,
                 score       TEXT,
                 refinement  TEXT,
+                plan        TEXT,
+                history     TEXT,
                 created_at  TEXT NOT NULL,
                 updated_at  TEXT NOT NULL
             )
             """
         )
-        # Migrate databases created before stage 6 existed
+        # Migrate databases created before stages 6/7 and version history existed
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(projects)")}
-        if "refinement" not in columns:
-            conn.execute("ALTER TABLE projects ADD COLUMN refinement TEXT")
+        for col in ("refinement", "plan", "history"):
+            if col not in columns:
+                conn.execute(f"ALTER TABLE projects ADD COLUMN {col} TEXT")
 
 
 def _now() -> str:
@@ -52,7 +57,7 @@ def _now() -> str:
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
     d = dict(row)
-    for col in STAGE_COLUMNS:
+    for col in JSON_COLUMNS:
         d[col] = json.loads(d[col]) if d[col] else None
     return d
 
@@ -95,6 +100,18 @@ def save_stage(pid: str, column: str, data: dict, stage: int) -> dict:
             f"UPDATE projects SET {column} = ?, stage = ?, updated_at = ?{clears} WHERE id = ?",
             (json.dumps(data), stage, _now(), pid),
         )
+    return get_project(pid)
+
+
+def update_project(pid: str, fields: dict) -> dict | None:
+    """Update input fields and/or stage columns directly (no clearing of later stages)."""
+    allowed = {"title", "idea_text", "stage", *JSON_COLUMNS}
+    if not fields.keys() <= allowed:
+        raise ValueError(f"Unknown columns: {set(fields) - allowed}")
+    values = [json.dumps(v) if k in JSON_COLUMNS and v is not None else v for k, v in fields.items()]
+    assignments = ", ".join(f"{k} = ?" for k in fields)
+    with _connect() as conn:
+        conn.execute(f"UPDATE projects SET {assignments}, updated_at = ? WHERE id = ?", (*values, _now(), pid))
     return get_project(pid)
 
 

@@ -30,6 +30,9 @@ class LocalStore:
     def save_stage(self, pid: str, column: str, data: dict, stage: int) -> dict:
         return database.save_stage(pid, column, data, stage)
 
+    def update_project(self, pid: str, fields: dict) -> dict | None:
+        return database.update_project(pid, fields)
+
     def delete_project(self, pid: str) -> bool:
         return database.delete_project(pid)
 
@@ -79,6 +82,11 @@ class SupabaseStore:
         if not rows:
             raise HTTPException(404, "Project not found")
         return rows[0]
+
+    def update_project(self, pid: str, fields: dict) -> dict | None:
+        update = {**fields, "updated_at": datetime.now(timezone.utc).isoformat()}
+        rows = self._request("PATCH", {"id": f"eq.{pid}"}, json=update, prefer="return=representation")
+        return rows[0] if rows else None
 
     def delete_project(self, pid: str) -> bool:
         return bool(self._request("DELETE", {"id": f"eq.{pid}"}, prefer="return=representation"))

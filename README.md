@@ -3,7 +3,7 @@
 ResearchX takes a research idea and/or a GitHub repository, finds related literature, and gives an
 evidence-based **Research Opportunity Score (ROS)** with research gaps and suggested modifications.
 
-This repository implements stages 1–6 of the 10-stage workflow in the SRS.
+This repository implements stages 1–7 of the 10-stage workflow in the SRS.
 
 | # | Stage (SRS §1.4) | Status |
 |---|---|---|
@@ -12,8 +12,9 @@ This repository implements stages 1–6 of the 10-stage workflow in the SRS.
 | 3 | Literature Analysis (OpenAlex, Semantic Scholar, arXiv + semantic ranking) | ✅ Built |
 | 4 | Research Opportunity Score (6 transparent dimensions) | ✅ Built |
 | 5 | Research Gap Discovery | ✅ Built |
-| 6 | Interactive Refinement (advisor chat → editable refined proposal → approve → re-score as a new project) | ✅ Built |
-| 7–10 | Experiment Planning, Paper Development, Reviewer Simulation, Publication Guidance | Next milestones |
+| 6 | Interactive Refinement (advisor chat → editable refined proposal → approve → apply to the same project, keep version history, re-score and compare v1 → v2) | ✅ Built |
+| 7 | Experiment Planning (hypotheses traced to RQs, datasets, baselines, metrics, experiments, ablations, timeline fitted to the time budget, risks; Markdown export) | ✅ Built |
+| 8–10 | Paper Development, Reviewer Simulation, Publication Guidance | Next milestones |
 
 ## Architecture
 
@@ -119,7 +120,8 @@ cd backend && python -m scripts.smoke_test https://github.com/qodo-ai/pr-agent
 | `POST` | `/api/projects/{id}/refine/message` | 6 — send a message (`{"content": "..."}`) |
 | `POST` | `/api/projects/{id}/refine/propose` | 6 — draft the refined proposal from the discussion |
 | `PUT` | `/api/projects/{id}/refine/proposal` | 6 — save edits / approve (`{"proposal": {...}, "approved": true}`) |
-| `POST` | `/api/projects/{id}/refine/spinoff` | 6 — create a new project from the approved proposal |
+| `POST` | `/api/projects/{id}/refine/apply` | 6 — apply the approved proposal to this project (old version kept in `history`), then re-run 2–4 |
+| `POST` | `/api/projects/{id}/plan` | 7 — experiment plan (`{"weeks": 12, "team_size": 2, "compute": "cpu"\|"single_gpu"\|"multi_gpu", "notes": ""}`) |
 
 Re-running a stage clears the stages after it, so results never go stale.
 

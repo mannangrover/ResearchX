@@ -193,7 +193,7 @@ export default function NewProjectForm({ onCreated, projectCount }) {
             What happens next
           </h2>
           <ol className="pipeline">
-            {STAGES.slice(1, 6).map((s) => (
+            {STAGES.filter((s) => s.built && s.n > 1).map((s) => (
               <li key={s.n}>
                 <span className="pipeline-icon">
                   <Icon name={s.icon} size={15} />

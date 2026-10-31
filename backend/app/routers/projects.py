@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 
 from ..auth import User, current_user
-from ..schemas import LiteratureRequest, ProjectCreate, ProposalUpdate, RefineMessage
-from ..services import pipeline, refinement_service
+from ..schemas import LiteratureRequest, PlanOptions, ProjectCreate, ProposalUpdate, RefineMessage
+from ..services import experiment_service, pipeline, refinement_service
 from ..services.github_service import GitHubError, parse_repo_url
 from ..storage import get_store
 
@@ -134,15 +134,32 @@ def refine_reset(pid: str, user: User = Depends(current_user)):
     return store.save_stage(pid, "refinement", None, stage=4)
 
 
-@router.post("/{pid}/refine/spinoff", status_code=201)
-def refine_spinoff(pid: str, user: User = Depends(current_user)):
-    """Create a new project from the approved proposal so it can be scored (before/after)."""
+@router.post("/{pid}/refine/apply")
+def refine_apply(pid: str, user: User = Depends(current_user)):
+    """Apply the approved proposal to THIS project.
+
+    The current version (input, score, proposal, conversation) is appended to
+    `history`, the title and idea are replaced by the proposal, and the stage
+    results are cleared so stages 2-4 can be re-run on the refined idea.
+    """
     store = get_store(user)
     project = _scored_or_409(store, pid)
     state = project.get("refinement") or {}
     if not state.get("approved") or not state.get("proposal"):
         raise HTTPException(409, "Approve the refined proposal first")
-    data = refinement_service.spinoff_input(project)
-    new = store.create_project(data["title"], data["idea_text"], data["github_url"], data["domain"])
-    store.save_stage(pid, "refinement", {**state, "derived_project_id": new["id"]}, stage=6)
-    return new
+    history = [*(project.get("history") or []), refinement_service.snapshot(project)]
+    return store.update_project(pid, {
+        **refinement_service.refined_input(state["proposal"]),
+        "history": history, "stage": 1,
+        "profile": None, "literature": None, "score": None, "refinement": None, "plan": None,
+    })
+
+
+# ---------------------------------------------------------------- stage 7: experiment planning
+@router.post("/{pid}/plan")
+async def plan(pid: str, body: PlanOptions | None = None, user: User = Depends(current_user)):
+    store = get_store(user)
+    project = _scored_or_409(store, pid)
+    options = (body or PlanOptions()).model_dump()
+    result = await run_in_threadpool(experiment_service.build_plan, project, options)
+    return store.save_stage(pid, "plan", result, stage=7)

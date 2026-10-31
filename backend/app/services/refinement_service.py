@@ -7,8 +7,11 @@ without an API key.
 
 Stored shape (projects.refinement):
     {"messages": [{"role": "assistant"|"user", "content": str, "at": iso}],
-     "proposal": {...} | None, "approved": bool, "derived_project_id": str | None,
-     "method": "llm"|"heuristic"}
+     "proposal": {...} | None, "approved": bool, "method": "llm"|"heuristic"}
+
+Applying an approved proposal keeps the SAME project: the current version is
+snapshotted into projects.history, the title/idea are replaced by the proposal,
+and stages 2-4 are re-run so the score can be compared before/after.
 """
 from datetime import datetime, timezone
 
@@ -61,7 +64,7 @@ def _transcript(messages: list[dict]) -> str:
 
 
 def _new_state() -> dict:
-    return {"messages": [], "proposal": None, "approved": False, "derived_project_id": None, "method": "llm"}
+    return {"messages": [], "proposal": None, "approved": False, "method": "llm"}
 
 
 # ------------------------------------------------------------------ opening
@@ -187,10 +190,30 @@ def save_proposal(project: dict, proposal: dict, approved: bool) -> dict:
     return state
 
 
-def spinoff_input(project: dict) -> dict:
-    """Stage-1 input for a new project built from the approved proposal."""
-    p = project["refinement"]["proposal"]
-    rqs = " ".join(f"RQ{i}: {q}" for i, q in enumerate(p["research_questions"], 1))
-    idea = " ".join(x for x in (p["problem_statement"], p["approach"], rqs) if x)
-    return {"title": p["refined_title"][:200], "idea_text": idea[:20000],
-            "github_url": project["github_url"], "domain": project["domain"]}
+def refined_input(proposal: dict) -> dict:
+    """Stage-1 input (title + idea text) built from an approved proposal."""
+    rqs = " ".join(f"RQ{i}: {q}" for i, q in enumerate(proposal["research_questions"], 1))
+    idea = " ".join(x for x in (proposal["problem_statement"], proposal["approach"], rqs) if x)
+    return {"title": proposal["refined_title"][:200], "idea_text": idea[:20000]}
+
+
+def snapshot(project: dict) -> dict:
+    """A compact record of the current version, stored in projects.history before it is replaced."""
+    score, state = project["score"], project["refinement"]
+    history = project.get("history") or []
+    return {
+        "version": len(history) + 1,
+        "title": project["title"],
+        "idea_text": project["idea_text"],
+        "score": {
+            "total": score["total"],
+            "band": score["band"],
+            "dimensions": [{"key": d["key"], "name": d["name"], "score": d["score"]} for d in score["dimensions"]],
+            "llm_total": (score.get("llm_score") or {}).get("total"),
+        },
+        "papers": len(project["literature"]["papers"]),
+        "gaps": len(score.get("gaps", [])),
+        "proposal": state["proposal"],
+        "messages": state["messages"],
+        "replaced_at": _now(),
+    }

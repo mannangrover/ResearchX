@@ -98,7 +98,7 @@ function Chat({ messages, busy, onSend }) {
   );
 }
 
-function ProposalEditor({ proposal, approved, busy, onSave, onSpinoff, derivedId, onOpenProject }) {
+function ProposalEditor({ proposal, approved, busy, onSave, onApply }) {
   const [draft, setDraft] = useState(() => toDraft(proposal));
   const [dirty, setDirty] = useState(false);
 
@@ -123,7 +123,11 @@ function ProposalEditor({ proposal, approved, busy, onSave, onSpinoff, derivedId
           {approved && !dirty ? "Approved" : dirty ? "Unsaved edits" : "Draft — review and approve"}
         </span>
       </div>
-      <p className="small muted">Edit anything you disagree with. List fields take one item per line.</p>
+      <p className="small muted">
+        Edit anything you disagree with. List fields take one item per line. Once approved, applying the proposal updates
+        this project in place: the current version is kept in its history and stages 2–4 re-run on the refined idea so you
+        can compare the scores.
+      </p>
 
       <div className="proposal-grid">
         {TEXT_FIELDS.map(([k, label, rows]) => (
@@ -156,15 +160,10 @@ function ProposalEditor({ proposal, approved, busy, onSave, onSpinoff, derivedId
             {busy === "save" ? "Saving…" : "Approve Proposal"}
           </button>
         )}
-        {approved && !dirty && !derivedId && (
-          <button className="btn btn-primary" disabled={!!busy} onClick={onSpinoff}>
-            {busy === "spinoff" ? "Creating…" : "Create Refined Project & Score It"}
-            <Icon name="arrowRight" size={15} />
-          </button>
-        )}
-        {approved && !dirty && derivedId && (
-          <button className="btn btn-primary" onClick={() => onOpenProject(derivedId)}>
-            Open Refined Project <Icon name="arrowRight" size={15} />
+        {approved && !dirty && (
+          <button className="btn btn-primary" disabled={!!busy} onClick={onApply}>
+            <Icon name="refresh" size={15} />
+            Apply to This Project &amp; Re-score
           </button>
         )}
       </div>
@@ -172,7 +171,7 @@ function ProposalEditor({ proposal, approved, busy, onSave, onSpinoff, derivedId
   );
 }
 
-export default function RefinementPanel({ project, api, onUpdated, onOpenProject, disabled }) {
+export default function RefinementPanel({ project, api, onUpdated, onApply, disabled }) {
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState("");
   const state = project.refinement;
@@ -194,20 +193,6 @@ export default function RefinementPanel({ project, api, onUpdated, onOpenProject
   const reset = () => {
     if (confirm("Start the discussion over? The conversation and proposal will be cleared.")) {
       run("reset", () => api.refineReset(project.id));
-    }
-  };
-
-  const spinoff = async () => {
-    setBusy("spinoff");
-    setError("");
-    try {
-      const created = await api.refineSpinoff(project.id);
-      onUpdated(await api.getProject(project.id));
-      onOpenProject(created.id);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(null);
     }
   };
 
@@ -257,11 +242,9 @@ export default function RefinementPanel({ project, api, onUpdated, onOpenProject
         <ProposalEditor
           proposal={state.proposal}
           approved={state.approved}
-          busy={busy}
-          derivedId={state.derived_project_id}
+          busy={busy || (disabled && "parent")}
           onSave={(proposal, approved) => run("save", () => api.refineSaveProposal(project.id, proposal, approved))}
-          onSpinoff={spinoff}
-          onOpenProject={onOpenProject}
+          onApply={onApply}
         />
       )}
     </StageCard>

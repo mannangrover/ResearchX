@@ -201,10 +201,6 @@ function Workspace({ user, isDemo, onLogout }) {
                 id={selectedId}
                 onChanged={refreshList}
                 onDeleted={onDeleted}
-                onOpenProject={(pid) => {
-                  refreshList();
-                  setSelectedId(pid);
-                }}
               />
             ) : (
               <NewProjectForm onCreated={onCreated} projectCount={projects?.length || 0} />

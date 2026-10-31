@@ -6,7 +6,7 @@ export const STAGES = [
   { n: 4, name: "Research Opportunity Score", short: "Score", icon: "gauge", output: "ROS with explanation", built: true },
   { n: 5, name: "Research Gap Discovery", short: "Gaps", icon: "target", output: "Potential research directions", built: true },
   { n: 6, name: "Interactive Refinement", short: "Refine", icon: "message", output: "Refined problem and contribution", built: true },
-  { n: 7, name: "Experiment Planning", short: "Plan", icon: "flask", output: "Experiment and methodology plan", built: false },
+  { n: 7, name: "Experiment Planning", short: "Plan", icon: "flask", output: "Experiment and methodology plan", built: true },
   { n: 8, name: "Paper Development", short: "Paper", icon: "file", output: "Structured research manuscript", built: false },
   { n: 9, name: "Reviewer Simulation", short: "Review", icon: "users", output: "Reviewer feedback and checklist", built: false },
   { n: 10, name: "Publication Guidance", short: "Publish", icon: "rocket", output: "Venue shortlist and readiness", built: false },
@@ -16,6 +16,7 @@ export const BUILT_STAGES = STAGES.filter((s) => s.built).length;
 
 // Which stage a project has completed, based on stored results
 export function completedStage(project) {
+  if (project.plan) return 7;
   if (project.refinement?.approved) return 6;
   if (project.score) return 5;
   if (project.literature) return 3;
