@@ -3,7 +3,14 @@
 ResearchX takes a research idea and/or a GitHub repository, finds related literature, and gives an
 evidence-based **Research Opportunity Score (ROS)** with research gaps and suggested modifications.
 
-This repository implements stages 1–7 of the 10-stage workflow in the SRS.
+This repository implements stages 1–8 of the 10-stage workflow in the SRS, grouped into four modules:
+
+| Module | Stages | Input → Output |
+|---|---|---|
+| M1 Project Understanding | 1 Idea Input, 2 Project Analysis | Idea / repo URL → technical profile |
+| M2 Research Opportunity Assessment | 3 Literature, 4 Opportunity Score, 5 Gap Discovery | Profile → related papers, score, gaps |
+| M3 Research Design | 6 Refinement, 7 Experiment Planning | Gaps → refined proposal, experiment plan |
+| M4 Publication Support | 8 Paper Evaluation, 9 Reviewer Simulation, 10 Publication Guidance | Uploaded paper → evaluation, reviews, venues |
 
 | # | Stage (SRS §1.4) | Status |
 |---|---|---|
@@ -12,9 +19,10 @@ This repository implements stages 1–7 of the 10-stage workflow in the SRS.
 | 3 | Literature Analysis (OpenAlex, Semantic Scholar, arXiv + semantic ranking) | ✅ Built |
 | 4 | Research Opportunity Score (6 transparent dimensions) | ✅ Built |
 | 5 | Research Gap Discovery | ✅ Built |
-| 6 | Interactive Refinement (advisor chat → editable refined proposal → approve → apply to the same project, keep version history, re-score and compare v1 → v2) | ✅ Built |
+| 6 | Interactive Refinement (advisor chat → editable refined proposal → approve → new **version** of the same project: profile and papers are reused, only the ROS is re-computed; every version can be viewed or made the working version) | ✅ Built |
 | 7 | Experiment Planning (hypotheses traced to RQs, datasets, baselines, metrics, experiments, ablations, timeline fitted to the time budget, risks; Markdown export) | ✅ Built |
-| 8–10 | Paper Development, Reviewer Simulation, Publication Guidance | Next milestones |
+| 8 | Paper Evaluation (the student implements the plan, writes the paper and uploads it as PDF/DOCX/TeX/MD; mandatory plan-compliance check, research questions, hypotheses, structure, claims, references, reproducibility, readiness score, draft history) | ✅ Built |
+| 9–10 | Reviewer Simulation, Publication Guidance | Next milestones |
 
 ## Architecture
 
@@ -120,8 +128,10 @@ cd backend && python -m scripts.smoke_test https://github.com/qodo-ai/pr-agent
 | `POST` | `/api/projects/{id}/refine/message` | 6 — send a message (`{"content": "..."}`) |
 | `POST` | `/api/projects/{id}/refine/propose` | 6 — draft the refined proposal from the discussion |
 | `PUT` | `/api/projects/{id}/refine/proposal` | 6 — save edits / approve (`{"proposal": {...}, "approved": true}`) |
-| `POST` | `/api/projects/{id}/refine/apply` | 6 — apply the approved proposal to this project (old version kept in `history`), then re-run 2–4 |
+| `POST` | `/api/projects/{id}/refine/apply` | 6 — create a new version from the approved proposal and re-compute its ROS |
+| `POST` | `/api/projects/{id}/versions/{n}/switch` | make stored version `n` the working version (the current one is kept) |
 | `POST` | `/api/projects/{id}/plan` | 7 — experiment plan (`{"weeks": 12, "team_size": 2, "compute": "cpu"\|"single_gpu"\|"multi_gpu", "notes": ""}`) |
+| `POST` | `/api/projects/{id}/paper` | 8 — evaluate the uploaded paper (`{"filename", "content_base64", "change_note"}`) |
 
 Re-running a stage clears the stages after it, so results never go stale.
 

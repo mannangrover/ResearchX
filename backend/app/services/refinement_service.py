@@ -9,9 +9,9 @@ Stored shape (projects.refinement):
     {"messages": [{"role": "assistant"|"user", "content": str, "at": iso}],
      "proposal": {...} | None, "approved": bool, "method": "llm"|"heuristic"}
 
-Applying an approved proposal keeps the SAME project: the current version is
-snapshotted into projects.history, the title/idea are replaced by the proposal,
-and stages 2-4 are re-run so the score can be compared before/after.
+Applying an approved proposal keeps the SAME project: it becomes a new version
+(see versions_service) with the proposal as its idea, the same profile and
+papers, and a re-computed Research Opportunity Score for before/after comparison.
 """
 from datetime import datetime, timezone
 
@@ -196,24 +196,3 @@ def refined_input(proposal: dict) -> dict:
     idea = " ".join(x for x in (proposal["problem_statement"], proposal["approach"], rqs) if x)
     return {"title": proposal["refined_title"][:200], "idea_text": idea[:20000]}
 
-
-def snapshot(project: dict) -> dict:
-    """A compact record of the current version, stored in projects.history before it is replaced."""
-    score, state = project["score"], project["refinement"]
-    history = project.get("history") or []
-    return {
-        "version": len(history) + 1,
-        "title": project["title"],
-        "idea_text": project["idea_text"],
-        "score": {
-            "total": score["total"],
-            "band": score["band"],
-            "dimensions": [{"key": d["key"], "name": d["name"], "score": d["score"]} for d in score["dimensions"]],
-            "llm_total": (score.get("llm_score") or {}).get("total"),
-        },
-        "papers": len(project["literature"]["papers"]),
-        "gaps": len(score.get("gaps", [])),
-        "proposal": state["proposal"],
-        "messages": state["messages"],
-        "replaced_at": _now(),
-    }

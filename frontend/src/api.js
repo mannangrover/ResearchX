@@ -53,4 +53,8 @@ export const api = {
   refineApply: (id) => request(`/projects/${id}/refine/apply`, { method: "POST" }),
   // Stage 7 — experiment planning
   plan: (id, options) => request(`/projects/${id}/plan`, { method: "POST", body: JSON.stringify(options) }),
+  // Stage 8 — paper evaluation ({ filename, content_base64, change_note })
+  paper: (id, body) => request(`/projects/${id}/paper`, { method: "POST", body: JSON.stringify(body) }),
+  // Versions inside a project
+  switchVersion: (id, n) => request(`/projects/${id}/versions/${n}/switch`, { method: "POST" }),
 };

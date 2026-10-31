@@ -7,15 +7,24 @@ export const STAGES = [
   { n: 5, name: "Research Gap Discovery", short: "Gaps", icon: "target", output: "Potential research directions", built: true },
   { n: 6, name: "Interactive Refinement", short: "Refine", icon: "message", output: "Refined problem and contribution", built: true },
   { n: 7, name: "Experiment Planning", short: "Plan", icon: "flask", output: "Experiment and methodology plan", built: true },
-  { n: 8, name: "Paper Development", short: "Paper", icon: "file", output: "Structured research manuscript", built: false },
+  { n: 8, name: "Paper Evaluation", short: "Paper", icon: "file", output: "Plan-compliance and quality report on the uploaded paper", built: true },
   { n: 9, name: "Reviewer Simulation", short: "Review", icon: "users", output: "Reviewer feedback and checklist", built: false },
   { n: 10, name: "Publication Guidance", short: "Publish", icon: "rocket", output: "Venue shortlist and readiness", built: false },
+];
+
+// Stages grouped into four modules, each with one clear input -> output
+export const MODULES = [
+  { n: 1, name: "Project Understanding", stages: [1, 2], output: "Technical profile" },
+  { n: 2, name: "Research Opportunity Assessment", stages: [3, 4, 5], output: "Related work, score and gaps" },
+  { n: 3, name: "Research Design", stages: [6, 7], output: "Refined proposal and experiment plan" },
+  { n: 4, name: "Publication Support", stages: [8, 9, 10], output: "Paper evaluation, reviews and venues" },
 ];
 
 export const BUILT_STAGES = STAGES.filter((s) => s.built).length;
 
 // Which stage a project has completed, based on stored results
 export function completedStage(project) {
+  if (project.paper) return 8;
   if (project.plan) return 7;
   if (project.refinement?.approved) return 6;
   if (project.score) return 5;

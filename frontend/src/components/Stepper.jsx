@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import Icon from "./Icon";
-import { BUILT_STAGES, STAGES } from "../stages";
+import { BUILT_STAGES, MODULES, STAGES } from "../stages";
 
 // Workflow progress that doubles as the tab list for the project's stages.
 export default function Stepper({ completed, available, selected, onSelect, runningStage }) {
@@ -30,6 +30,18 @@ export default function Stepper({ completed, available, selected, onSelect, runn
       </div>
       <div className="progress" aria-hidden="true">
         <span style={{ width: `${(completed / STAGES.length) * 100}%` }} />
+      </div>
+      <div className="modules" aria-hidden="true">
+        {MODULES.map((m) => (
+          <span
+            key={m.n}
+            className={`module ${m.stages.includes(selected) ? "active" : ""}`}
+            style={{ gridColumn: `${m.stages[0]} / ${m.stages.at(-1) + 1}` }}
+            title={`Module ${m.n}: ${m.name} → ${m.output}`}
+          >
+            <b>M{m.n}</b> {m.name}
+          </span>
+        ))}
       </div>
       <div className="stepper" role="tablist" aria-label="Project stages" ref={listRef} onKeyDown={onKeyDown}>
         {STAGES.map((s) => {

@@ -4,7 +4,9 @@
   3. Literature analysis   -> run_literature()
   4. Opportunity score     -> run_scoring()   (also produces
   5. Research gaps            gaps + suggested modifications)
+  6 -> 4 refined version   -> rescore_refined() (same profile and papers, new ROS)
 """
+import copy
 import json
 import re
 from datetime import date
@@ -226,6 +228,28 @@ def run_scoring(project: dict) -> dict:
     return {**score, **analysis, "method": method, "note": note,
             "llm_score": llm_judgement, "comparison": comparison, "llm_score_note": llm_score_note,
             "disclaimer": "Decision-support estimate only. It does not guarantee novelty or publication."}
+
+
+# ---------------------------------------------------------------- refined version (stage 6 -> 4)
+def rescore_refined(project: dict) -> tuple[dict, dict]:
+    """Re-compute the ROS for a refined version WITHOUT repeating stages 2-3.
+
+    The technical profile and the retrieved papers stay the same; the papers are
+    only re-ranked against the refined idea (novelty depends on that similarity),
+    then stage 4 + 5 run again. Returns (literature, score).
+    """
+    lit = copy.deepcopy(project["literature"])
+    prof = project["profile"]["profile"]
+    text = " ".join([project["title"], project["idea_text"],
+                     " ".join(prof.get("techniques", [])), " ".join(prof.get("keywords", []))])
+    sims, backend = score_papers(text, lit["papers"])
+    for p, s in zip(lit["papers"], sims):
+        p["similarity"] = round(s, 3)
+        p["shared_terms"] = shared_terms(text, p)
+    lit["papers"].sort(key=lambda p: -p["similarity"])
+    lit["embedding_backend"] = backend
+    lit["reranked_for_refinement"] = True
+    return lit, run_scoring({**project, "literature": lit})
 
 
 def clean_url(url: str) -> str:

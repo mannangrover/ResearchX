@@ -8,3 +8,4 @@ numpy>=1.26
 
 # Optional: better semantic similarity (downloads torch, ~1 GB)
 # sentence-transformers>=3.0
+pypdf>=4.0

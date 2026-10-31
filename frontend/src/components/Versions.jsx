@@ -3,6 +3,173 @@ import { BAND_CLASS } from "./ScorePanel";
 import { timeAgo } from "../stages";
 
 const fmt = (n) => (n == null ? "—" : n.toFixed(1));
+const STAGE_DATA = ["profile", "literature", "score", "refinement", "plan", "paper"];
+
+// All versions of a project, oldest first. Mirrors backend services/versions_service.load().
+export function versionsOf(viewed) {
+  const project = viewed.__base || viewed;
+  let h = project.history;
+  if (Array.isArray(h)) {
+    // Legacy rows: a list of compact summaries saved before full snapshots existed
+    h = {
+      current: h.length + 1,
+      current_parent: h.at(-1)?.version ?? null,
+      current_label: h.length ? "Refined" : "Original",
+      versions: h.map((v, i) => ({ ...v, legacy: true, label: i ? "Refined" : "Original", parent: v.version - 1 || null })),
+    };
+  }
+  h = h || { current: 1, current_parent: null, current_label: "Original", versions: [] };
+  const working = {
+    version: h.current,
+    parent: h.current_parent,
+    label: h.current_label,
+    title: project.title,
+    score: project.score,
+    working: true,
+  };
+  return { current: h.current, list: [...h.versions, working].sort((a, b) => a.version - b.version) };
+}
+
+const totalOf = (v) => v?.score?.total;
+const llmTotalOf = (v) => v?.score?.llm_score?.total ?? v?.score?.llm_total;
+
+// A stored version shaped like a project, so the normal tabs can display it read-only
+export function viewOf(project, number) {
+  const v = versionsOf(project).list.find((x) => x.version === number);
+  if (!v || v.working) return null;
+  return {
+    ...project,
+    title: v.title,
+    idea_text: v.idea_text,
+    ...Object.fromEntries(STAGE_DATA.map((k) => [k, v[k] ?? null])),
+    __version: v,
+    __base: project,
+  };
+}
+
+// The version being displayed (working or stored) and the one it was derived from
+export function shownVersion(project) {
+  const { list, current } = versionsOf(project);
+  const number = project.__version?.version ?? current;
+  const shown = list.find((v) => v.version === number);
+  return { number, parent: list.find((v) => v.version === shown?.parent) };
+}
+
+export function VersionSwitcher({ project, viewing, onView }) {
+  const { list, current } = versionsOf(project);
+  if (list.length < 2) return null;
+  return (
+    <label className="version-switcher">
+      <Icon name="layers" size={14} />
+      <span className="sr-only">Project version</span>
+      <select value={viewing ?? current} onChange={(e) => onView(Number(e.target.value) === current ? null : Number(e.target.value))}>
+        {[...list].reverse().map((v) => (
+          <option key={v.version} value={v.version}>
+            v{v.version} · {v.label || "Version"}
+            {totalOf(v) != null ? ` · ${fmt(totalOf(v))}` : ""}
+            {v.working ? " · working" : ""}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+// Stage 1 tab: every version of the project, with a way to open any of them
+export function VersionHistory({ project, viewing, onView }) {
+  const { list, current } = versionsOf(project);
+  if (list.length < 2) return null;
+  const shown = viewing ?? current;
+  return (
+    <div className="versions">
+      <h3 className="sub-title">
+        <Icon name="layers" size={15} /> Versions of this project
+      </h3>
+      <ol className="version-list">
+        {list.map((v) => (
+          <li key={v.version} className={`version ${v.working ? "is-current" : ""} ${v.version === shown ? "is-shown" : ""}`}>
+            <span className="version-tag">v{v.version}</span>
+            <div className="version-main">
+              <strong>{v.title}</strong>
+              <span className="small muted">
+                {v.label || "Version"}
+                {v.parent ? ` from v${v.parent}` : ""}
+                {totalOf(v) != null && (
+                  <>
+                    {" · ROS "}
+                    <span className={BAND_CLASS[v.score.band]}>{fmt(totalOf(v))}</span>
+                  </>
+                )}
+                {v.working ? " · working version" : v.saved_at ? ` · saved ${timeAgo(v.saved_at || v.replaced_at)}` : ""}
+                {v.legacy ? " · summary only" : ""}
+              </span>
+            </div>
+            {v.version !== shown && (
+              <button className="btn btn-ghost btn-sm" onClick={() => onView(v.working ? null : v.version)}>
+                {v.working ? "Back to Working" : "View"}
+              </button>
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+// Banner shown while a stored version is open
+export function VersionBanner({ version, busy, onSwitch, onBack }) {
+  return (
+    <div className="alert alert-warn version-banner" role="status">
+      <Icon name="layers" size={16} />
+      <div>
+        <strong>
+          Viewing v{version.version} · {version.label}
+        </strong>{" "}
+        — read-only. Make it the working version to continue from it; the current working version is kept.
+      </div>
+      <div className="version-banner-actions">
+        {!version.legacy && (
+          <button className="btn btn-primary btn-sm" disabled={busy} onClick={onSwitch}>
+            Make v{version.version} the Working Version
+          </button>
+        )}
+        <button className="btn btn-ghost btn-sm" onClick={onBack}>
+          Back to Working Version
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Versions saved before full snapshots existed only have a score summary
+export function LegacySummary({ version }) {
+  return (
+    <section className="card vc-card">
+      <span className="eyebrow">v{version.version} · summary only</span>
+      <h2 className="vc-title">{version.title}</h2>
+      <p className="small muted">This version was saved before full version snapshots existed, so only its score summary is available.</p>
+      {version.idea_text && <p className="idea-text">{version.idea_text}</p>}
+      <div className="table-wrap">
+        <table className="compare-table">
+          <tbody>
+            <tr>
+              <th scope="row">Research Opportunity Score</th>
+              <td className="num">
+                {fmt(version.score.total)} ({version.score.band})
+              </td>
+            </tr>
+            {version.score.dimensions.map((d) => (
+              <tr key={d.key}>
+                <th scope="row">{d.name}</th>
+                <td className="num">{fmt(d.score)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
 function Delta({ value, digits = 1 }) {
   if (value == null) return <span className="muted">—</span>;
@@ -16,78 +183,23 @@ function Delta({ value, digits = 1 }) {
   );
 }
 
-// Stage 1 tab: every version this project has gone through (oldest first, current last)
-export function VersionHistory({ project }) {
-  const history = project.history || [];
-  if (!history.length) return null;
-  const current = history.length + 1;
-  return (
-    <div className="versions">
-      <h3 className="sub-title">
-        <Icon name="layers" size={15} /> Version history
-      </h3>
-      <ol className="version-list">
-        {history.map((v) => (
-          <li key={v.version} className="version">
-            <span className="version-tag">v{v.version}</span>
-            <div className="version-main">
-              <strong>{v.title}</strong>
-              <span className="small muted">
-                Scored{" "}
-                <span className={BAND_CLASS[v.score.band]}>
-                  {fmt(v.score.total)}/100 ({v.score.band})
-                </span>{" "}
-                · {v.papers} papers · {v.gaps} gaps · replaced {timeAgo(v.replaced_at)}
-              </span>
-              <details className="disclosure">
-                <summary>What changed in v{v.version + 1}</summary>
-                {v.proposal?.changes_from_original?.length ? (
-                  <ul className="check-list">
-                    {v.proposal.changes_from_original.map((c) => (
-                      <li key={c}>{c}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="small muted">No change list was recorded.</p>
-                )}
-                <p className="small muted version-idea">
-                  <strong>Original text:</strong> {v.idea_text || "(GitHub repository only)"}
-                </p>
-              </details>
-            </div>
-          </li>
-        ))}
-        <li className="version is-current">
-          <span className="version-tag">v{current}</span>
-          <div className="version-main">
-            <strong>{project.title}</strong>
-            <span className="small muted">
-              Current version
-              {project.score ? ` · scored ${fmt(project.score.total)}/100` : " · re-analysis in progress or pending"}
-            </span>
-          </div>
-        </li>
-      </ol>
-    </div>
-  );
-}
-
-// Stage 4 tab: score of the previous version vs the current one
+// Stage 4 tab: ROS of the parent version vs this one
 export function VersionCompare({ project }) {
-  const prev = (project.history || []).at(-1);
+  const { number: current, parent: prev } = shownVersion(project);
   const score = project.score;
-  if (!prev || !score) return null;
+  if (!prev?.score || !score) return null;
   const before = Object.fromEntries(prev.score.dimensions.map((d) => [d.key, d.score]));
+  const llmBefore = llmTotalOf(prev);
   const llmNow = score.llm_score?.total;
   return (
     <section className="card vc-card" aria-labelledby="compare-title">
       <header className="vc-head">
         <div>
           <span className="eyebrow">Refinement impact</span>
-          <h2 id="compare-title">
-            v{prev.version} → v{prev.version + 1}
+          <h2 id="compare-title" className="vc-title">
+            v{prev.version} → v{current}
           </h2>
-          <p className="small muted">Same scoring method, re-run on the refined idea with a fresh literature search.</p>
+          <p className="small muted">Same profile and papers; only the idea changed, so the difference comes from the refinement.</p>
         </div>
         <div className="vc-totals">
           <div>
@@ -111,7 +223,7 @@ export function VersionCompare({ project }) {
                 v{prev.version}
               </th>
               <th scope="col" className="num">
-                v{prev.version + 1}
+                v{current}
               </th>
               <th scope="col" className="num">
                 Change
@@ -130,14 +242,14 @@ export function VersionCompare({ project }) {
               </tr>
             ))}
           </tbody>
-          {prev.score.llm_total != null && llmNow != null && (
+          {llmBefore != null && llmNow != null && (
             <tfoot>
               <tr>
                 <th scope="row">LLM judge total</th>
-                <td className="num">{fmt(prev.score.llm_total)}</td>
+                <td className="num">{fmt(llmBefore)}</td>
                 <td className="num">{fmt(llmNow)}</td>
                 <td className="num">
-                  <Delta value={llmNow - prev.score.llm_total} />
+                  <Delta value={llmNow - llmBefore} />
                 </td>
               </tr>
             </tfoot>
@@ -148,6 +260,4 @@ export function VersionCompare({ project }) {
   );
 }
 
-export function previousTotal(project) {
-  return (project.history || []).at(-1)?.score.total;
-}
+export { Delta };

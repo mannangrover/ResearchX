@@ -10,29 +10,26 @@ import ScorePanel, { BAND_CLASS } from "./ScorePanel";
 import GapsPanel from "./GapsPanel";
 import RefinementPanel from "./RefinementPanel";
 import PlanPanel from "./PlanPanel";
-import { VersionCompare, VersionHistory, previousTotal } from "./Versions";
+import PaperPanel from "./PaperPanel";
+import { LegacySummary, VersionBanner, VersionCompare, VersionHistory, VersionSwitcher, shownVersion, versionsOf, viewOf } from "./Versions";
 
 const STEPS = {
-  apply: { stage: 1, label: "Applying the refined proposal to this project…" },
+  apply: { stage: 4, label: "Creating the refined version: re-computing the Research Opportunity Score (profile and papers are reused)…" },
+  switch: { stage: 1, label: "Switching version…" },
   analyze: { stage: 2, label: "Analysing the project and repository…" },
   literature: { stage: 3, label: "Searching OpenAlex, Semantic Scholar and arXiv, then ranking papers…" },
   score: { stage: 4, label: "Computing the Research Opportunity Score and research gaps…" },
   plan: { stage: 7, label: "Designing the experiment plan…" },
+  paper: { stage: 8, label: "Reading the paper and checking it against the plan…" },
 };
-
-// Stages 2-4 re-run after a refined proposal is applied
-const RESCORE_CHAIN = [
-  ["analyze", (id) => api.analyze(id)],
-  ["literature", (id) => api.literature(id)],
-  ["score", (id) => api.score(id)],
-];
 
 // Which tab to open first: the next thing to do, or the headline result
 function defaultTab(project) {
   if (!project.profile) return 2;
   if (!project.literature) return 3;
   if (!project.score) return 4;
-  if (project.plan || project.refinement?.approved) return 7;
+  if (project.plan) return 8;
+  if (project.refinement?.approved) return 7;
   return 4;
 }
 
@@ -41,7 +38,8 @@ function Overview({ project }) {
   if (!literature && !score) return null;
   const items = [];
   if (score) {
-    const prev = previousTotal(project);
+    const { parent } = shownVersion(project);
+    const prev = parent?.score?.total;
     const delta = prev == null ? null : score.total - prev;
     items.push({
       label: "Opportunity score",
@@ -50,7 +48,7 @@ function Overview({ project }) {
       sub:
         delta == null
           ? `${score.band} opportunity`
-          : `${score.band} · ${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(1)} vs v${project.history.length}`,
+          : `${score.band} · ${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(1)} vs v${parent.version}`,
       cls: BAND_CLASS[score.band],
     });
     if (score.llm_score) {
@@ -103,6 +101,7 @@ function Prerequisite({ stage, needs, onGo }) {
 export default function ProjectView({ id, onChanged, onDeleted }) {
   const [project, setProject] = useState(null);
   const [tab, setTab] = useState(null);
+  const [viewing, setViewing] = useState(null); // number of a stored version being viewed, or null
   const [running, setRunning] = useState(null);
   const [error, setError] = useState("");
 
@@ -140,11 +139,18 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
   };
 
   const applyRefinement = async () => {
-    if (!confirm("Apply the approved proposal to this project? The current version is saved in its history, then stages 2–4 re-run on the refined idea.")) return;
-    if (!(await run("apply", () => api.refineApply(id)))) return;
-    for (const [step, fn] of RESCORE_CHAIN) {
-      if (!(await run(step, () => fn(id)))) return;
-    }
+    const next = Math.max(...versionsOf(project).list.map((v) => v.version)) + 1;
+    if (!confirm(`Create v${next} from the approved proposal? The current version stays available in this project's version list.`)) return;
+    await run("apply", () => api.refineApply(id));
+  };
+
+  const view = (n) => {
+    setViewing(n);
+    setError("");
+  };
+
+  const switchTo = async (n) => {
+    if (await run("switch", () => api.switchVersion(id, n))) setViewing(null);
   };
 
   const remove = async () => {
@@ -165,29 +171,33 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
     );
   }
 
+  // A stored version is shown read-only through the same tabs
+  const shown = (viewing != null && viewOf(project, viewing)) || project;
+  const stored = shown.__version;
+  const readOnly = !!stored;
   const available = STAGES.filter((s) => s.built).map((s) => s.n);
-  const version = (project.history || []).length + 1;
-  const busy = !!running;
+  const { current } = versionsOf(project);
+  const busy = !!running || readOnly;
 
   // Tab content. Stages whose input is missing show a pointer to the prerequisite instead.
   const panels = {
     1: (
       <StageCard stage={1} title="Research idea" done>
-        {project.idea_text ? (
-          <p className="idea-text">{project.idea_text}</p>
+        {shown.idea_text ? (
+          <p className="idea-text">{shown.idea_text}</p>
         ) : (
           <p className="muted">No written idea — this project is analysed from its GitHub repository.</p>
         )}
-        <VersionHistory project={project} />
+        <VersionHistory project={shown} viewing={viewing} onView={view} />
       </StageCard>
     ),
     2: (
-      <ProfilePanel data={project.profile} running={running === "analyze"} disabled={busy} onRun={() => run("analyze", () => api.analyze(id))} />
+      <ProfilePanel data={shown.profile} running={running === "analyze"} disabled={busy} onRun={() => run("analyze", () => api.analyze(id))} />
     ),
-    3: project.profile ? (
+    3: shown.profile ? (
       <LiteraturePanel
-        data={project.literature}
-        defaultQueries={project.profile.profile.search_queries}
+        data={shown.literature}
+        defaultQueries={shown.profile.profile.search_queries}
         running={running === "literature"}
         disabled={busy}
         onRun={(queries) => run("literature", () => api.literature(id, queries))}
@@ -195,18 +205,18 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
     ) : (
       <Prerequisite stage={3} needs={2} onGo={selectTab} />
     ),
-    4: project.literature ? (
+    4: shown.literature ? (
       <>
-        <VersionCompare project={project} />
-        <ScorePanel data={project.score} running={running === "score"} disabled={busy} onRun={() => run("score", () => api.score(id))} />
+        <VersionCompare project={shown} />
+        <ScorePanel data={shown.score} running={running === "score"} disabled={busy} onRun={() => run("score", () => api.score(id))} />
       </>
     ) : (
-      <Prerequisite stage={4} needs={project.profile ? 3 : 2} onGo={selectTab} />
+      <Prerequisite stage={4} needs={shown.profile ? 3 : 2} onGo={selectTab} />
     ),
-    5: project.score ? <GapsPanel data={project.score} /> : <Prerequisite stage={5} needs={4} onGo={selectTab} />,
-    6: project.score ? (
+    5: shown.score ? <GapsPanel data={shown.score} /> : <Prerequisite stage={5} needs={4} onGo={selectTab} />,
+    6: shown.score ? (
       <RefinementPanel
-        project={project}
+        project={shown}
         api={api}
         disabled={busy}
         onUpdated={(p) => {
@@ -218,10 +228,15 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
     ) : (
       <Prerequisite stage={6} needs={4} onGo={selectTab} />
     ),
-    7: project.score ? (
-      <PlanPanel project={project} running={running === "plan"} disabled={busy} onRun={(opts) => run("plan", () => api.plan(id, opts))} />
+    7: shown.score ? (
+      <PlanPanel project={shown} running={running === "plan"} disabled={busy} onRun={(opts) => run("plan", () => api.plan(id, opts))} />
     ) : (
       <Prerequisite stage={7} needs={4} onGo={selectTab} />
+    ),
+    8: shown.plan ? (
+      <PaperPanel project={shown} running={running === "paper"} disabled={busy} onRun={(body) => run("paper", () => api.paper(id, body))} />
+    ) : (
+      <Prerequisite stage={8} needs={shown.score ? 7 : 4} onGo={selectTab} />
     ),
   };
 
@@ -236,9 +251,8 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
           <span className="eyebrow">
             {project.domain || "Domain not set"}
             {project.created_at && ` · created ${timeAgo(project.created_at)}`}
-            {version > 1 && <span className="version-pill">v{version} · refined</span>}
           </span>
-          <h1>{project.title}</h1>
+          <h1>{shown.title}</h1>
           {project.github_url && (
             <a className="repo-link" href={project.github_url} target="_blank" rel="noreferrer">
               <Icon name="github" size={14} />
@@ -247,16 +261,21 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
             </a>
           )}
         </div>
-        <button className="btn btn-ghost btn-danger" onClick={remove} disabled={busy}>
-          <Icon name="trash" size={15} /> Delete
-        </button>
+        <div className="project-head-actions">
+          <VersionSwitcher project={project} viewing={viewing} onView={view} />
+          <button className="btn btn-ghost btn-danger" onClick={remove} disabled={!!running}>
+            <Icon name="trash" size={15} /> Delete
+          </button>
+        </div>
       </header>
 
-      <Overview project={project} />
+      {stored && <VersionBanner version={stored} busy={!!running} onSwitch={() => switchTo(stored.version)} onBack={() => view(null)} />}
+
+      {!stored?.legacy && <Overview project={shown} />}
 
       <div className="stage-tabs" id="stage-tabs">
         <Stepper
-          completed={completedStage(project)}
+          completed={completedStage(shown)}
           available={available}
           selected={tab}
           onSelect={selectTab}
@@ -274,8 +293,14 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
         {error && <Alert kind="error">{error}</Alert>}
       </div>
 
-      <div className="tab-panel" role="tabpanel" id={`panel-stage-${tab}`} aria-labelledby={`tab-stage-${tab}`} key={tab}>
-        {panels[tab]}
+      <div
+        className={`tab-panel ${readOnly ? "readonly" : ""}`}
+        role="tabpanel"
+        id={`panel-stage-${tab}`}
+        aria-labelledby={`tab-stage-${tab}`}
+        key={`${tab}-${viewing}`}
+      >
+        {stored?.legacy ? <LegacySummary version={stored} /> : panels[tab]}
       </div>
 
       <nav className="tab-pager" aria-label="Stage navigation">

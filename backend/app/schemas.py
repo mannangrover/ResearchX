@@ -34,3 +34,9 @@ class PlanOptions(BaseModel):
     team_size: int = Field(2, ge=1, le=10)
     compute: Literal["cpu", "single_gpu", "multi_gpu"] = "single_gpu"
     notes: str = Field("", max_length=1000)
+
+
+class PaperUpload(BaseModel):
+    filename: str = Field(..., min_length=3, max_length=200)
+    content_base64: str = Field(..., min_length=10, max_length=21_000_000)  # ~15 MB file
+    change_note: str = Field("", max_length=3000)

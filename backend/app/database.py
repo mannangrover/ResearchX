@@ -1,9 +1,9 @@
 """SQLite persistence for projects.
 
 Each project row stores the user input plus the JSON output of every
-pipeline stage (profile, literature, score, refinement, plan), so stages can be
-re-run independently and the UI can resume where the user left off. `history`
-keeps a snapshot of every earlier version of a refined project.
+pipeline stage (profile, literature, score, refinement, plan, paper), so stages
+can be re-run independently and the UI can resume where the user left off.
+`history` holds the project's other versions (see services/versions_service).
 """
 import json
 import sqlite3
@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from .config import settings
 
-STAGE_COLUMNS = ("profile", "literature", "score", "refinement", "plan")
+STAGE_COLUMNS = ("profile", "literature", "score", "refinement", "plan", "paper")
 JSON_COLUMNS = (*STAGE_COLUMNS, "history")
 
 
@@ -38,6 +38,7 @@ def init_db() -> None:
                 score       TEXT,
                 refinement  TEXT,
                 plan        TEXT,
+                paper       TEXT,
                 history     TEXT,
                 created_at  TEXT NOT NULL,
                 updated_at  TEXT NOT NULL
@@ -46,7 +47,7 @@ def init_db() -> None:
         )
         # Migrate databases created before stages 6/7 and version history existed
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(projects)")}
-        for col in ("refinement", "plan", "history"):
+        for col in ("refinement", "plan", "paper", "history"):
             if col not in columns:
                 conn.execute(f"ALTER TABLE projects ADD COLUMN {col} TEXT")
 

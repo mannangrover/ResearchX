@@ -124,9 +124,9 @@ function ProposalEditor({ proposal, approved, busy, onSave, onApply }) {
         </span>
       </div>
       <p className="small muted">
-        Edit anything you disagree with. List fields take one item per line. Once approved, applying the proposal updates
-        this project in place: the current version is kept in its history and stages 2–4 re-run on the refined idea so you
-        can compare the scores.
+        Edit anything you disagree with. List fields take one item per line. Once approved, the proposal becomes a new version
+        of this project: the technical profile and papers are reused and only the Research Opportunity Score is re-computed,
+        so you can compare it with the current version. Every version stays available in the version menu.
       </p>
 
       <div className="proposal-grid">
@@ -163,7 +163,7 @@ function ProposalEditor({ proposal, approved, busy, onSave, onApply }) {
         {approved && !dirty && (
           <button className="btn btn-primary" disabled={!!busy} onClick={onApply}>
             <Icon name="refresh" size={15} />
-            Apply to This Project &amp; Re-score
+            Create Refined Version &amp; Re-score
           </button>
         )}
       </div>

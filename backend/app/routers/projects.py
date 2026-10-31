@@ -1,9 +1,12 @@
+import base64
+import binascii
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 
 from ..auth import User, current_user
-from ..schemas import LiteratureRequest, PlanOptions, ProjectCreate, ProposalUpdate, RefineMessage
-from ..services import experiment_service, pipeline, refinement_service
+from ..schemas import LiteratureRequest, PaperUpload, PlanOptions, ProjectCreate, ProposalUpdate, RefineMessage
+from ..services import experiment_service, paper_service, pipeline, refinement_service, versions_service
 from ..services.github_service import GitHubError, parse_repo_url
 from ..storage import get_store
 
@@ -135,24 +138,34 @@ def refine_reset(pid: str, user: User = Depends(current_user)):
 
 
 @router.post("/{pid}/refine/apply")
-def refine_apply(pid: str, user: User = Depends(current_user)):
-    """Apply the approved proposal to THIS project.
+async def refine_apply(pid: str, user: User = Depends(current_user)):
+    """Turn the approved proposal into a NEW VERSION of this project.
 
-    The current version (input, score, proposal, conversation) is appended to
-    `history`, the title and idea are replaced by the proposal, and the stage
-    results are cleared so stages 2-4 can be re-run on the refined idea.
+    The working version is kept in full in `history`. The new version keeps the
+    same technical profile (stage 2) and papers (stage 3, re-ranked against the
+    refined idea) and only re-computes the Research Opportunity Score (4 + 5).
     """
     store = get_store(user)
     project = _scored_or_409(store, pid)
     state = project.get("refinement") or {}
     if not state.get("approved") or not state.get("proposal"):
         raise HTTPException(409, "Approve the refined proposal first")
-    history = [*(project.get("history") or []), refinement_service.snapshot(project)]
+    history = versions_service.branch(project, "Refined")
+    refined = {**project, **refinement_service.refined_input(state["proposal"]),
+               "refinement": None, "plan": None, "paper": None, "history": history}
+    literature, score = await run_in_threadpool(pipeline.rescore_refined, refined)
     return store.update_project(pid, {
-        **refinement_service.refined_input(state["proposal"]),
-        "history": history, "stage": 1,
-        "profile": None, "literature": None, "score": None, "refinement": None, "plan": None,
+        "title": refined["title"], "idea_text": refined["idea_text"], "history": history, "stage": 4,
+        "literature": literature, "score": score, "refinement": None, "plan": None, "paper": None,
     })
+
+
+@router.post("/{pid}/versions/{number}/switch")
+def switch_version(pid: str, number: int, user: User = Depends(current_user)):
+    """Make a stored version the working version (the current one is kept in history)."""
+    store = get_store(user)
+    project = _get_or_404(store, pid)
+    return store.update_project(pid, versions_service.switch(project, number))
 
 
 # ---------------------------------------------------------------- stage 7: experiment planning
@@ -163,3 +176,24 @@ async def plan(pid: str, body: PlanOptions | None = None, user: User = Depends(c
     options = (body or PlanOptions()).model_dump()
     result = await run_in_threadpool(experiment_service.build_plan, project, options)
     return store.save_stage(pid, "plan", result, stage=7)
+
+
+# ---------------------------------------------------------------- stage 8: paper evaluation
+@router.post("/{pid}/paper")
+async def paper(pid: str, body: PaperUpload, user: User = Depends(current_user)):
+    store = get_store(user)
+    project = _get_or_404(store, pid)
+    if not project.get("plan"):
+        raise HTTPException(409, "Create the experiment plan (stage 7) first: the paper is evaluated against it")
+    try:
+        data = base64.b64decode(body.content_base64, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(422, "The uploaded file could not be decoded")
+    result = await run_in_threadpool(paper_service.evaluate, project, body.filename, data, body.change_note.strip())
+    previous = project.get("paper")
+    if previous:
+        drafts = previous.get("drafts", [])
+        result["drafts"] = [*drafts, paper_service.draft_summary(previous, len(drafts) + 1)]
+    else:
+        result["drafts"] = []
+    return store.save_stage(pid, "paper", result, stage=8)
