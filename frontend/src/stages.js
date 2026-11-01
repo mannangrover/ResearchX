@@ -14,10 +14,10 @@ export const STAGES = [
 
 // Stages grouped into four modules, each with one clear input -> output
 export const MODULES = [
-  { n: 1, name: "Project Understanding", stages: [1, 2], output: "Technical profile" },
-  { n: 2, name: "Research Opportunity Assessment", stages: [3, 4, 5], output: "Related work, score and gaps" },
-  { n: 3, name: "Research Design", stages: [6, 7], output: "Refined proposal and experiment plan" },
-  { n: 4, name: "Publication Support", stages: [8, 9, 10], output: "Paper evaluation, reviews and venues" },
+  { n: 1, name: "Project Understanding", stages: [1, 2], main: 2, output: "Technical profile" },
+  { n: 2, name: "Research Opportunity Assessment", stages: [3, 4, 5], main: 4, output: "Related work, score and gaps" },
+  { n: 3, name: "Research Design", stages: [6, 7], main: 7, output: "Refined proposal and experiment plan" },
+  { n: 4, name: "Publication Support", stages: [8, 9, 10], main: 10, output: "Paper evaluation, reviews and venues" },
 ];
 
 export const BUILT_STAGES = STAGES.filter((s) => s.built).length;

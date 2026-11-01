@@ -6,7 +6,10 @@ import { Delta } from "./Versions";
 const ACCEPT = ".pdf,.docx,.tex,.md,.txt";
 const MAX_MB = 15;
 
-const BAND_CLASS = { "Ready for review": "band-strong", "Needs revision": "band-limited", "Major revision": "band-weak" };
+// Quality bands (older evaluations used the readiness-style names on the right)
+const BAND_CLASS = { Strong: "band-strong", Adequate: "band-limited", Weak: "band-weak", "Ready for review": "band-strong", "Needs revision": "band-limited", "Major revision": "band-weak" };
+const OLD_BAND = { "Ready for review": "Strong", "Needs revision": "Adequate", "Major revision": "Weak" };
+export const qualityBand = (band) => OLD_BAND[band] || band;
 const GAP = { addressed: ["Addressed", "chip-ok"], partial: ["Partly", "chip-warn"], not_addressed: ["Not addressed", ""] };
 const RQ = { answered: ["Answered", "chip-ok"], partial: ["Partly", "chip-warn"], not_answered: ["Not answered", ""] };
 const PLAN = { done: ["Done", "chip-ok"], changed: ["Changed", "chip-accent"], not_done: ["Not done", ""] };
@@ -548,7 +551,7 @@ export default function PaperPanel({ project, running, disabled, onRun }) {
             {s.total.toFixed(1)}
             <span className="kpi-unit"> / 100</span>
           </strong>
-          <span className={`small ${BAND_CLASS[s.band]}`}>{s.band}</span>
+          <span className={`small ${BAND_CLASS[s.band]}`}>{qualityBand(s.band)} paper</span>
         </div>
         <div className="paper-score">
           <span className="small muted">Questions & aims answered</span>

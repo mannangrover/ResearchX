@@ -502,7 +502,7 @@ def _score(analysis: dict, review: dict, checks: dict, refs: dict, repro: list[d
     ]
     rows = [{"key": k, "name": name, "score": round(v * w, 1), "max": w, "comment": c} for k, name, v, w, c in parts]
     total = round(sum(r["score"] for r in rows), 1)
-    band = "Ready for review" if total >= 75 else "Needs revision" if total >= 55 else "Major revision"
+    band = "Strong" if total >= 75 else "Adequate" if total >= 55 else "Weak"  # quality only; readiness is stage 10
     return {"total": total, "band": band, "parts": rows}
 
 

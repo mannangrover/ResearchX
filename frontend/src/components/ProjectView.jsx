@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import { STAGES, completedStage, timeAgo } from "../stages";
+import { MODULES, STAGES, completedStage, timeAgo } from "../stages";
 import Icon from "./Icon";
-import Stepper from "./Stepper";
+import ModuleNav from "./ModuleNav";
 import { Alert, StageCard } from "./common";
 import ProfilePanel from "./ProfilePanel";
 import LiteraturePanel from "./LiteraturePanel";
@@ -10,7 +10,7 @@ import ScorePanel, { BAND_CLASS } from "./ScorePanel";
 import GapsPanel from "./GapsPanel";
 import RefinementPanel from "./RefinementPanel";
 import PlanPanel from "./PlanPanel";
-import PaperPanel from "./PaperPanel";
+import PaperPanel, { qualityBand } from "./PaperPanel";
 import GuidancePanel from "./GuidancePanel";
 import { LegacySummary, VersionBanner, VersionCompare, VersionHistory, VersionSwitcher, shownVersion, versionsOf, viewOf } from "./Versions";
 
@@ -36,44 +36,80 @@ function defaultTab(project) {
   return 4;
 }
 
-function Overview({ project }) {
-  const { literature, score } = project;
-  if (!literature && !score) return null;
+const COMPUTE = { cpu: "CPU only", single_gpu: "one GPU", multi_gpu: "several GPUs" };
+const half = (rows, full, part) => rows.reduce((n, r) => n + (r.status === full ? 1 : r.status === part ? 0.5 : 0), 0);
+
+// Key results of the open module only — each module answers its own question
+function moduleSummary(project, module) {
+  const { profile, literature, score, refinement, plan, paper, guidance } = project;
   const items = [];
-  if (score) {
-    const { parent } = shownVersion(project);
-    const prev = parent?.score?.total;
-    const delta = prev == null ? null : score.total - prev;
-    items.push({
-      label: "Opportunity score",
-      value: score.total.toFixed(1),
-      unit: "/ 100",
-      sub:
-        delta == null
-          ? `${score.band} opportunity`
-          : `${score.band} · ${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(1)} vs v${parent.version}`,
-      cls: BAND_CLASS[score.band],
-    });
-    if (score.llm_score) {
+  if (module === 1 && profile) {
+    const p = profile.profile;
+    const repo = profile.repository;
+    items.push({ label: "Input", value: repo ? "Repo" : "Idea", sub: repo ? `${repo.owner}/${repo.name}` : "written idea only" });
+    items.push({ label: "Techniques", value: p.techniques.length, sub: p.techniques.slice(0, 2).join(", ") });
+    items.push({ label: "Keywords", value: p.keywords.length, sub: "used for the literature search" });
+    if (repo) items.push({ label: "Code files", value: repo.code_file_count, sub: repo.languages.slice(0, 3).join(", ") });
+  }
+  if (module === 2 && (literature || score)) {
+    if (score) {
+      const { parent } = shownVersion(project);
+      const prev = parent?.score?.total;
+      const delta = prev == null ? null : score.total - prev;
       items.push({
-        label: "LLM judge",
-        value: score.llm_score.total.toFixed(1),
+        label: "Opportunity score",
+        value: score.total.toFixed(1),
         unit: "/ 100",
-        sub: score.comparison?.agreement || score.llm_score.band,
+        sub: delta == null ? `${score.band} opportunity` : `${score.band} · ${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(1)} vs v${parent.version}`,
+        cls: BAND_CLASS[score.band],
       });
+      if (score.llm_score) {
+        items.push({ label: "LLM judge", value: score.llm_score.total.toFixed(1), unit: "/ 100", sub: score.comparison?.agreement || score.llm_score.band });
+      }
+    }
+    if (literature) items.push({ label: "Papers analysed", value: literature.stats.total, sub: `top ${literature.papers.length} ranked` });
+    if (score) items.push({ label: "Research gaps", value: score.gaps.length, sub: `${score.research_questions.length} research questions` });
+  }
+  if (module === 3 && score) {
+    const v = versionsOf(project);
+    const shownNumber = project.__version?.version ?? v.current;
+    items.push({ label: "Version", value: `v${shownNumber}`, sub: `${v.list.length} version${v.list.length > 1 ? "s" : ""} in this project` });
+    items.push({
+      label: "Refined proposal",
+      value: refinement?.approved ? "Approved" : refinement?.proposal ? "Draft" : refinement ? "Discussing" : "Not started",
+      sub: refinement ? `${refinement.messages.length} messages with the advisor` : "stage 6",
+    });
+    if (plan) {
+      items.push({ label: "Experiment plan", value: `${plan.options.weeks} wk`, sub: `team of ${plan.options.team_size} · ${COMPUTE[plan.options.compute]}` });
+      items.push({ label: "Experiments", value: plan.experiments.length, sub: `${plan.hypotheses.length} hypotheses · ${plan.ablations.length} ablations` });
+    } else {
+      items.push({ label: "Experiment plan", value: "—", sub: "not created yet" });
     }
   }
-  if (literature) {
-    items.push({ label: "Papers analysed", value: literature.stats.total, sub: `top ${literature.papers.length} ranked` });
+  if (module === 4 && paper?.analysis) {
+    const a = paper.analysis;
+    items.push({ label: "Paper score", value: paper.score.total.toFixed(1), unit: "/ 100", sub: `${qualityBand(paper.score.band)} paper` });
+    items.push({
+      label: "Questions answered",
+      value: a.items.length ? `${half(a.items, "answered", "partial")}/${a.items.length}` : "—",
+      sub: `claims supported ${half(a.claims, "supported", "partial")}/${a.claims.length}`,
+    });
+    items.push({ label: "Readiness", value: guidance ? guidance.readiness.label : "—", sub: guidance ? "stage 10" : "run stage 10", small: true });
+    items.push({ label: "Target tier", value: guidance ? guidance.tier.name : "—", sub: guidance ? `strength ${guidance.strength.toFixed(2)}` : "run stage 10", small: true });
   }
-  if (score) items.push({ label: "Research gaps", value: score.gaps.length, sub: `${score.research_questions.length} research questions` });
+  return items;
+}
+
+function Overview({ project, module }) {
+  const items = moduleSummary(project, module);
+  if (!items.length) return null;
   return (
     <dl className="kpis">
       {items.map((k) => (
         <div key={k.label} className="kpi">
           <dt>{k.label}</dt>
           <dd>
-            <span className={`kpi-value ${k.cls || ""}`}>{k.value}</span>
+            <span className={`kpi-value ${k.small ? "kpi-text" : ""} ${k.cls || ""}`}>{k.value}</span>
             {k.unit && <span className="kpi-unit">{k.unit}</span>}
           </dd>
           <dd className="kpi-sub">{k.sub}</dd>
@@ -121,7 +157,7 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
 
   const selectTab = (n) => {
     setTab(n);
-    document.getElementById("stage-tabs")?.scrollIntoView({ block: "nearest" });
+    document.getElementById("workflow-nav")?.scrollIntoView({ block: "nearest" });
   };
 
   // Run one stage; switches to its tab so the user sees the result. Returns false on failure.
@@ -281,17 +317,11 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
 
       {stored && <VersionBanner version={stored} onBack={() => setViewing(null)} />}
 
-      {!stored?.legacy && <Overview project={shown} />}
-
-      <div className="stage-tabs" id="stage-tabs">
-        <Stepper
-          completed={completedStage(shown)}
-          available={available}
-          selected={tab}
-          onSelect={selectTab}
-          runningStage={running && STEPS[running].stage}
-        />
+      <div id="workflow-nav">
+        <ModuleNav completed={completedStage(shown)} selected={tab} onSelect={selectTab} runningStage={running && STEPS[running].stage} />
       </div>
+
+      {!stored?.legacy && <Overview project={shown} module={MODULES.find((m) => m.stages.includes(tab))?.n} />}
 
       <div className="run-status" aria-live="polite">
         {running && (
