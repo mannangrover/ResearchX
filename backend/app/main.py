@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import database
 from .config import settings
-from .routers import projects
+from .routers import papers, projects
 from .services import llm_service, similarity_service
 
 app = FastAPI(
@@ -23,6 +23,7 @@ app.add_middleware(
 
 database.init_db()
 app.include_router(projects.router)
+app.include_router(papers.router)
 
 # Load the embedding model in the background so the first literature search isn't slow
 threading.Thread(target=similarity_service.warm_up, daemon=True).start()

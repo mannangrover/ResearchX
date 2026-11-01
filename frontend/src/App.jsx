@@ -9,12 +9,14 @@ const TrashPage = lazy(() => import("./components/TrashPage"));
 const AccountPage = lazy(() => import("./components/AccountPage"));
 const NewProjectForm = lazy(() => import("./components/NewProjectForm"));
 const ProjectView = lazy(() => import("./components/ProjectView"));
+const PapersPage = lazy(() => import("./components/PapersPage"));
+const PaperDetail = lazy(() => import("./components/PaperDetail"));
 import AuthPage from "./components/AuthPage";
 import Icon, { Logo } from "./components/Icon";
 import ThemeToggle from "./components/ThemeToggle";
 
 // Pages that need a login; a signed-out visitor is asked to log in and then returns to them
-const isPrivateRoute = () => /^#\/(project\/|new$|trash$|account$)/.test(window.location.hash);
+const isPrivateRoute = () => /^#\/(project\/|papers|new$|trash$|account$)/.test(window.location.hash);
 
 function Splash({ children }) {
   return (
@@ -148,7 +150,7 @@ function SignedOut({ supabase, demo, sessionEnded }) {
 
   const mode = page === "signup" ? "signup" : "login";
   const notice = sessionEnded ? "Your session has ended. Log in again to continue." : isPrivateRoute() ? "Log in to open this page." : "";
-  return <AuthPage key={mode} supabase={supabase} demo={demo} initialMode={mode} initialInfo={notice} />;
+  return <AuthPage key={`${mode}-${notice}`} supabase={supabase} demo={demo} initialMode={mode} initialInfo={notice} />;
 }
 
 function initials(text) {
@@ -156,11 +158,12 @@ function initials(text) {
   return (parts[0]?.[0] || "?").toUpperCase() + (parts[1]?.[0] || "").toUpperCase();
 }
 
-// Pages live in the URL hash so the browser's Back button works: #/  #/new  #/trash  #/account  #/project/<id>
+// Pages live in the URL hash so the browser's Back button works: #/  #/new  #/papers  #/papers/<id>  #/trash  #/account  #/project/<id>
 function parseHash() {
   const h = window.location.hash.replace(/^#\/?/, "");
   if (h.startsWith("project/")) return { view: "project", id: h.slice("project/".length) };
-  if (["new", "trash", "account"].includes(h)) return { view: h };
+  if (h.startsWith("papers/")) return { view: "paper", id: h.slice("papers/".length) };
+  if (["new", "papers", "trash", "account"].includes(h)) return { view: h };
   return { view: "list" };
 }
 
@@ -208,7 +211,8 @@ function Workspace({ supabase, user, isDemo, onLogout }) {
     go("#/");
   };
 
-  const projects = allProjects && allProjects.filter((p) => !p.deleted_at);
+  const projects = allProjects && allProjects.filter((p) => !p.deleted_at && !p.standalone);
+  const papers = allProjects && allProjects.filter((p) => !p.deleted_at && p.standalone);
   const trash = allProjects && allProjects.filter((p) => p.deleted_at);
   const name = isDemo ? "Demo account" : user?.user_metadata?.name || user?.email;
 
@@ -264,6 +268,7 @@ function Workspace({ supabase, user, isDemo, onLogout }) {
           filter={filter}
           view={route.view}
           onNew={() => go("#/new")}
+          onPapers={() => go("#/papers")}
           onFilter={(f) => {
             setFilter(f);
             go("#/");
@@ -276,10 +281,14 @@ function Workspace({ supabase, user, isDemo, onLogout }) {
               <ProjectView key={route.id} id={route.id} onChanged={refreshList} onDeleted={onDeleted} />
             ) : route.view === "new" ? (
               <NewProjectForm onCreated={onCreated} projectCount={projects?.length || 0} />
+            ) : route.view === "papers" ? (
+              <PapersPage papers={papers} onChanged={refreshList} onOpen={(pid) => go(`#/papers/${pid}`)} />
+            ) : route.view === "paper" ? (
+              <PaperDetail key={route.id} id={route.id} onChanged={refreshList} onDeleted={() => { refreshList(); go("#/papers"); }} />
             ) : route.view === "trash" ? (
               <TrashPage trash={trash} onChanged={refreshList} />
             ) : route.view === "account" ? (
-              <AccountPage supabase={supabase} user={user} isDemo={isDemo} projects={projects} trash={trash} health={health} onLogout={onLogout} />
+              <AccountPage supabase={supabase} user={user} isDemo={isDemo} projects={projects} papers={papers} trash={trash} health={health} onLogout={onLogout} />
             ) : (
               <ProjectsPage
                 projects={projects}

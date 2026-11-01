@@ -16,7 +16,7 @@ from .config import settings
 
 # Small summary fields read straight out of the JSON columns for the projects table
 LIST_COLUMNS = ("id,title,github_url,domain,stage,created_at,updated_at,"
-                "deleted_at,ros:score->total,paper_score:paper->score->total,tier:guidance->tier->>name,version:history->current")
+                "deleted_at,ros:score->total,paper_score:paper->score->total,tier:guidance->tier->>name,version:history->current,standalone:paper->standalone")
 
 
 class LocalStore:

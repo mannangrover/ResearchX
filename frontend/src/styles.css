@@ -292,7 +292,7 @@ code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-siz
   display: flex; flex-direction: column; gap: 14px; padding: 16px 12px;
   background: var(--surface); border-right: 1px solid var(--border);
 }
-.sidebar .btn-primary.is-current { box-shadow: 0 0 0 3px var(--primary-ring); }
+.sidebar .btn.is-current { box-shadow: 0 0 0 3px var(--primary-ring); }
 .search {
   display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 8px;
   border: 1px solid var(--border); background: var(--surface-2); color: var(--muted);
@@ -748,6 +748,25 @@ textarea { resize: vertical; line-height: 1.5; }
 .guidance-card strong.band-weak { color: var(--danger); }
 .guidance-card strong .icon { color: var(--primary); }
 .tier-rules { margin-top: 14px; }
+.page-title { font-family: var(--font-display); font-size: 1.9rem; font-weight: 600; letter-spacing: -0.01em; }
+.paper-page-intro { max-width: var(--measure); margin: 6px 0 var(--s-5); color: var(--text-2); }
+.papers-list { margin-top: var(--s-6); }
+.papers-list h2 { font-size: var(--fs-h3); font-weight: 600; margin-bottom: var(--s-3); }
+.pt-delete { width: 52px; text-align: right; }
+.paper-detail .project-head { align-items: flex-start; }
+.paper-lede { font-size: var(--fs-lead); line-height: 1.5; color: var(--text-2); max-width: var(--measure); margin-top: var(--s-2); }
+.paper-card { padding: var(--s-5); }
+.about-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-5); }
+.about-grid h3 { font-size: var(--fs-sm); font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.about-grid p { margin: 0; }
+.related-list { list-style: none; padding: 0; margin: 0; border: 1px solid var(--border); border-radius: var(--radius); }
+.related-list li { display: grid; grid-template-columns: minmax(0, 1fr) 96px auto; gap: var(--s-4); align-items: center; padding: var(--s-3) var(--s-4); }
+.related-list li + li { border-top: 1px solid var(--border); }
+.related-list a, .related-list strong { font-weight: 600; color: var(--text); }
+.related-list a:hover { color: var(--primary); }
+.related-meta { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--muted); }
+.related-sim { display: grid; gap: 3px; font-size: var(--fs-xs); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.related-sim .mini-progress { width: 100%; }
 .checks-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .repro-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: 0.86rem; }
 .repro-list li { display: flex; gap: 8px; align-items: center; }
@@ -758,15 +777,7 @@ textarea { resize: vertical; line-height: 1.5; }
   .module-tabs { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 800px) {
-  .paper-head, .guidance-head { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.guidance-card { display: grid; gap: 6px; padding: 16px 18px; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--surface-2); }
-.guidance-card strong { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 1.5rem; line-height: 1.2; color: var(--text); }
-.guidance-card strong.band-strong { color: var(--ok); }
-.guidance-card strong.band-limited { color: var(--warn); }
-.guidance-card strong.band-weak { color: var(--danger); }
-.guidance-card strong .icon { color: var(--primary); }
-.tier-rules { margin-top: 14px; }
-.checks-grid { grid-template-columns: 1fr 1fr; }
+  .paper-head, .checks-grid { grid-template-columns: 1fr 1fr; }
   .consistency { grid-template-columns: 1fr; }
   .guidance-head { grid-template-columns: 1fr; }
   .paper-score.main { grid-column: 1 / -1; }
@@ -1026,6 +1037,9 @@ textarea { resize: vertical; line-height: 1.5; }
   .topbar-context, .topbar-sep { display: none; }
 }
 @media (max-width: 800px) {
+  .about-grid { grid-template-columns: 1fr; }
+  .related-list li { grid-template-columns: minmax(0, 1fr) auto; }
+  .related-sim { display: none; }
   .layout { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto; max-height: 360px; border-right: 0; border-bottom: 1px solid var(--border); }
   .sidebar-foot { display: none; }

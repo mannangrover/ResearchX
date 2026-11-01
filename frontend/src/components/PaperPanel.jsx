@@ -7,7 +7,7 @@ const ACCEPT = ".pdf,.docx,.tex,.md,.txt";
 const MAX_MB = 15;
 
 // Quality bands (older evaluations used the readiness-style names on the right)
-const BAND_CLASS = { Strong: "band-strong", Adequate: "band-limited", Weak: "band-weak", "Ready for review": "band-strong", "Needs revision": "band-limited", "Major revision": "band-weak" };
+export const BAND_CLASS = { Strong: "band-strong", Adequate: "band-limited", Weak: "band-weak", "Ready for review": "band-strong", "Needs revision": "band-limited", "Major revision": "band-weak" };
 const OLD_BAND = { "Ready for review": "Strong", "Needs revision": "Adequate", "Major revision": "Weak" };
 export const qualityBand = (band) => OLD_BAND[band] || band;
 const GAP = { addressed: ["Addressed", "chip-ok"], partial: ["Partly", "chip-warn"], not_addressed: ["Not addressed", ""] };
@@ -48,9 +48,9 @@ function readBase64(file) {
 }
 
 // "2 of 3", allowing halves for partial matches
-const ratio = ([got, total]) => `${Number.isInteger(got) ? got : got.toFixed(1)} of ${total}`;
+export const ratio = ([got, total]) => `${Number.isInteger(got) ? got : got.toFixed(1)} of ${total}`;
 
-function analysisCounts(a) {
+export function analysisCounts(a) {
   const count = (rows, full, half) => rows.reduce((n, r) => n + (r.status === full ? 1 : r.status === half ? 0.5 : 0), 0);
   return {
     items: [count(a.items, "answered", "partial"), a.items.length],
@@ -69,7 +69,7 @@ function journeyCounts(j) {
   };
 }
 
-function UploadForm({ busy, revision, onSubmit, onCancel }) {
+export function UploadForm({ busy, revision, withNote = true, onSubmit, onCancel }) {
   const [file, setFile] = useState(null);
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
@@ -87,6 +87,7 @@ function UploadForm({ busy, revision, onSubmit, onCancel }) {
   const submit = async (e) => {
     e.preventDefault();
     if (!file) return setError("Choose your paper first.");
+    setError("");
     try {
       await onSubmit({ filename: file.name, content_base64: await readBase64(file), change_note: note.trim() });
     } catch (err) {
@@ -123,6 +124,7 @@ function UploadForm({ busy, revision, onSubmit, onCancel }) {
           </span>
         )}
       </label>
+      {withNote && (
       <div className="field">
         <label htmlFor="paper-note">
           Did you change anything from your plan? <span className="muted">(optional)</span>
@@ -136,6 +138,7 @@ function UploadForm({ busy, revision, onSubmit, onCancel }) {
           placeholder="e.g. Added a stronger distillation baseline; skipped the thermal study because the device was unavailable…"
         />
       </div>
+      )}
       {error && <Alert kind="error">{error}</Alert>}
       <div className="form-actions">
         {onCancel && (
@@ -152,7 +155,7 @@ function UploadForm({ busy, revision, onSubmit, onCancel }) {
   );
 }
 
-function Analysis({ paper }) {
+export function Analysis({ paper }) {
   const a = paper.analysis;
   return (
     <>
@@ -222,7 +225,7 @@ function Analysis({ paper }) {
   );
 }
 
-function Quality({ paper }) {
+export function Quality({ paper }) {
   const drafts = paper.drafts || [];
   return (
     <>
@@ -431,7 +434,7 @@ function Journey({ paper }) {
   );
 }
 
-function Checks({ paper }) {
+export function Checks({ paper }) {
   const k = paper.checks;
   const r = paper.references;
   return (

@@ -20,7 +20,7 @@ function Section({ icon, title, description, children }) {
   );
 }
 
-export default function AccountPage({ supabase, user, isDemo, projects, trash, health, onLogout }) {
+export default function AccountPage({ supabase, user, isDemo, projects, papers, trash, health, onLogout }) {
   const [name, setName] = useState(user?.user_metadata?.name || "");
   const [pw, setPw] = useState({ next: "", confirm: "" });
   const [busy, setBusy] = useState(null);
@@ -124,6 +124,8 @@ export default function AccountPage({ supabase, user, isDemo, projects, trash, h
             <dd>{active.length}</dd>
             <dt>Completed</dt>
             <dd>{completed}</dd>
+            <dt>Paper analyses</dt>
+            <dd>{(papers || []).length}</dd>
             <dt>In the trash</dt>
             <dd>
               {(trash || []).length} (<a href="#/trash">open the trash</a>)

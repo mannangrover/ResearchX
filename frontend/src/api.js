@@ -63,6 +63,9 @@ export const api = {
   paper: (id, body) => request(`/projects/${id}/paper`, { method: "POST", body: JSON.stringify(body) }),
   // Stage 10 — publication guidance (readiness + target tier)
   guidance: (id) => request(`/projects/${id}/guidance`, { method: "POST" }),
+  // Standalone paper analysis ({ filename, content_base64 })
+  analysePaper: (body) => request("/papers", { method: "POST", body: JSON.stringify(body) }),
+  analyseRevisedPaper: (id, body) => request(`/papers/${id}`, { method: "POST", body: JSON.stringify(body) }),
   // Versions inside a project
   switchVersion: (id, n) => request(`/projects/${id}/versions/${n}/switch`, { method: "POST" }),
 };

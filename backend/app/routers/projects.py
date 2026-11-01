@@ -1,5 +1,3 @@
-import base64
-import binascii
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -208,10 +206,7 @@ async def plan(pid: str, body: PlanOptions | None = None, user: User = Depends(c
 async def paper(pid: str, body: PaperUpload, user: User = Depends(current_user)):
     store = get_store(user)
     project = _scored_or_409(store, pid)  # the plan (stage 7) is optional: the paper is compared with it when it exists
-    try:
-        data = base64.b64decode(body.content_base64, validate=True)
-    except (binascii.Error, ValueError):
-        raise HTTPException(422, "The uploaded file could not be decoded")
+    data = paper_service.decode_upload(body.content_base64)
     result = await run_in_threadpool(paper_service.evaluate, project, body.filename, data, body.change_note.strip())
     previous = project.get("paper")
     drafts = [d for d in (previous or {}).get("drafts", []) if d.get("score") is not None]

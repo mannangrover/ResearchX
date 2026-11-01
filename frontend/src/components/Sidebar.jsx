@@ -5,7 +5,7 @@ import { FILTERS } from "./ProjectsPage";
 const FILTER_ICON = { all: "folder", progress: "refresh", done: "check" };
 
 // Overleaf-style navigation: new project, status filters and domains (like tags).
-export default function Sidebar({ projects, trashCount, filter, onFilter, onNew, view }) {
+export default function Sidebar({ projects, trashCount, filter, onFilter, onNew, onPapers, view }) {
   const list = projects || [];
   const domains = Object.entries(
     list.reduce((acc, p) => {
@@ -19,6 +19,13 @@ export default function Sidebar({ projects, trashCount, filter, onFilter, onNew,
     <aside className="sidebar" aria-label="Projects navigation">
       <button className={`btn btn-primary btn-block ${view === "new" ? "is-current" : ""}`} onClick={onNew}>
         <Icon name="plus" size={16} /> New Project
+      </button>
+      <button
+        className={`btn btn-secondary btn-block ${view === "papers" || view === "paper" ? "is-current" : ""}`}
+        aria-current={view === "papers" ? "page" : undefined}
+        onClick={onPapers}
+      >
+        <Icon name="file" size={16} /> Analyse a Paper
       </button>
 
       <nav className="sidebar-section" aria-label="Project filters">

@@ -25,6 +25,10 @@ This repository implements stages 1–8 and 10 of the 10-stage workflow in the S
 | 9 | Reviewer Simulation | Deferred |
 | 10 | Publication Guidance: **readiness** (Ready / Almost ready / Revise first, from the stage 8 paper score and blockers) and **target venue tier** (Top / Mid / Workshop-student track, from a weighted strength of paper quality, ROS, novelty, contribution and methodology, with the thresholds and what is missing for the next tier). Rule-based, no invented venue names. | ✅ Built |
 
+## Analyse a single paper
+
+The sidebar's **Analyse a Paper** button needs no project: upload a PDF, Word, LaTeX, Markdown or text file to get what the paper is about, whether it answers its own questions, whether its claims are backed by its results, the closest published work, a score with fixes, and comparisons between revised drafts. Analyses are private to the account and share the trash with projects.
+
 ## Architecture
 
 ```
@@ -135,6 +139,8 @@ cd backend && python -m scripts.smoke_test https://github.com/qodo-ai/pr-agent
 | `POST` | `/api/projects/{id}/versions/{n}/switch` | open version `n` to work on (the previously open version is stored intact) |
 | `POST` | `/api/projects/{id}/plan` | 7 — experiment plan (`{"weeks": 12, "team_size": 2, "compute": "cpu"\|"single_gpu"\|"multi_gpu", "notes": ""}`) |
 | `POST` | `/api/projects/{id}/paper` | 8 — evaluate the uploaded paper (`{"filename", "content_base64", "change_note"}`) |
+| `POST` | `/api/papers` | analyse an uploaded paper with no project (`{"filename", "content_base64"}`) |
+| `POST` | `/api/papers/{id}` | analyse a revised draft of that paper |
 | `POST` | `/api/projects/{id}/guidance` | 10 — readiness and target venue tier |
 
 Re-running a stage clears the stages after it, so results never go stale.

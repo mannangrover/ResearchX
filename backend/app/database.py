@@ -95,6 +95,7 @@ def list_projects() -> list[dict]:
             "paper_score": ((d["paper"] or {}).get("score") or {}).get("total"),
             "tier": ((d["guidance"] or {}).get("tier") or {}).get("name"),
             "version": history.get("current") if isinstance(history, dict) else None,
+            "standalone": (d["paper"] or {}).get("standalone"),
         })
     return out
 

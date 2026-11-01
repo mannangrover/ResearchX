@@ -19,17 +19,26 @@ ResearchX does not write the paper; it evaluates it in two separate parts:
 Text checks are deterministic; the judgements use the LLM with a fallback
 estimated from the deterministic checks. Only the evaluation is stored, not
 the paper text.
+
+`analyse_standalone` runs the same paper analysis with no project behind it: it
+also describes what the paper is and finds the closest published work itself.
 """
+import base64
+import binascii
 import html
 import io
 import re
 import zipfile
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
 
 from . import llm_service
 from .experiment_service import active_proposal
+from .literature_service import retrieve_papers
+from .similarity_service import score_papers
 
 MAX_BYTES = 15 * 1024 * 1024
 EXTENSIONS = {"pdf", "docx", "tex", "md", "txt"}
@@ -72,6 +81,13 @@ REVIEWER_SYSTEM = (
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def decode_upload(content_base64: str) -> bytes:
+    try:
+        return base64.b64decode(content_base64, validate=True)
+    except (binascii.Error, ValueError) as e:
+        raise HTTPException(422, "The uploaded file could not be decoded") from e
 
 
 # ------------------------------------------------------------------ text extraction
@@ -279,6 +295,8 @@ def research_gaps(project: dict) -> list[dict]:
 def _paper_excerpt(sections: list[dict], limit: int = 20000) -> str:
     budget = {"abstract": 2000, "front": 1500, "introduction": 2500, "related": 1500, "method": 3500,
               "experiments": 4000, "results": 4000, "discussion": 1800, "conclusion": 1500}
+    if len(sections) < 3:  # headings not recognised: send the text as it is
+        return "\n\n".join(s["text"] for s in sections)[:limit]
     parts = [f"## {SECTION_NAMES.get(s['key'], s['title'])}\n{s['text'][:budget[s['key']]]}" for s in sections if s["key"] in budget]
     return "\n\n".join(parts)[:limit]
 
@@ -495,8 +513,9 @@ def _score(analysis: dict, review: dict, checks: dict, refs: dict, repro: list[d
         ("methodology", "Methodology", methodology, 15, m_note),
         ("contribution", "Contribution & novelty", contribution, 10, c_note),
         ("clarity", "Clarity & structure", 0.5 * clarity + 0.5 * structure, 10, cl_note),
-        ("references", "References & related work", 0.5 * ref_ok + 0.5 * cited_share, 10,
-         f"{refs['count']} references; {sum(c['cited'] for c in cited)} of the {len(cited)} closest papers cited."),
+        ("references", "References & related work", 0.5 * ref_ok + 0.5 * cited_share if cited else ref_ok, 10,
+         f"{refs['count']} references; {sum(c['cited'] for c in cited)} of the {len(cited)} closest papers cited."
+         if cited else f"{refs['count']} references. No related papers were available to compare with."),
         ("reproducibility", "Reproducibility", sum(r["ok"] for r in repro) / len(repro), 10,
          f"{sum(r['ok'] for r in repro)} of {len(repro)} checklist items found."),
     ]
@@ -579,6 +598,133 @@ def evaluate(project: dict, filename: str, data: bytes, note: str) -> dict:
         "strengths": [str(s) for s in raw.get("strengths") or []][:4],
         "fixes": fixes,
         "journey": journey,
+        "outline": [{"key": s["key"], "title": SECTION_NAMES.get(s["key"], s["title"]), "words": _words(s["text"])} for s in sections],
+        "checks": checks,
+        "references": refs,
+        "reproducibility": repro,
+        "method": method,
+        "note": llm_note,
+        "evaluated_at": _now(),
+    }
+
+
+# ------------------------------------------------------------------ standalone analysis (no project)
+PAPER_TYPES = ("empirical study", "system or tool", "survey or review", "theoretical", "case study", "position paper", "other")
+
+
+def _llm_describe(text: str, sections: list[dict]) -> dict:
+    prompt = f"""START OF THE DOCUMENT (the title is usually here):
+{text[:600]}
+
+PAPER (excerpts by section):
+{_paper_excerpt(sections, 14000)}
+
+Describe what this paper is for someone who has not read it. Use only what the paper says. Return JSON:
+"title": the paper's exact title,
+"is_research_paper": true or false,
+"one_line": one sentence saying what it does,
+"summary": 3-5 plain sentences,
+"field": short research field, e.g. "Computer Vision",
+"paper_type": one of {list(PAPER_TYPES)},
+"problem": the problem it addresses, 1-2 sentences,
+"method": what the authors did, 1-2 sentences,
+"data": datasets or materials used, or "" if none,
+"findings": [2-5 main results, with numbers where the paper gives them],
+"keywords": [4-8 research keywords],
+"search_queries": [2-3 academic search queries that would find the closest prior work]"""
+    return llm_service.complete_json(REVIEWER_SYSTEM, prompt, 1500)
+
+
+def _first_line(text: str, filename: str) -> str:
+    return next((ln.strip() for ln in text.split("\n") if 5 < len(ln.strip()) < 200), filename)
+
+
+def _fallback_describe(text: str, sections: list[dict], body: str, filename: str) -> dict:
+    first = _first_line(text, filename)
+    abstract = _section(sections, "abstract") or body
+    common = Counter(re.findall(r"[a-z]{5,}", body.lower())).most_common(40)
+    stop = {"which", "their", "these", "those", "there", "about", "using", "based", "paper", "where", "while", "other", "results", "research"}
+    return {"title": first, "is_research_paper": len({s["key"] for s in sections}) >= 3, "summary": abstract[:800],
+            "keywords": [w for w, _ in common if w not in stop][:6], "search_queries": [first]}
+
+
+def _clean_about(raw: dict, fallback_title: str) -> dict:
+    text = lambda key: str(raw.get(key) or "").strip()  # noqa: E731
+    items = lambda key: [str(x).strip() for x in raw.get(key) or [] if str(x).strip()] if isinstance(raw.get(key), list) else []  # noqa: E731
+    title = text("title") or fallback_title
+    return {"title": title[:200], "is_research_paper": raw.get("is_research_paper") is not False, "one_line": text("one_line"), "summary": text("summary"),
+            "field": text("field")[:80], "paper_type": _pick(text("paper_type"), PAPER_TYPES, "other"), "problem": text("problem"),
+            "method": text("method"), "data": text("data"), "findings": items("findings")[:6], "keywords": items("keywords")[:10],
+            "search_queries": items("search_queries")[:3] or [title]}
+
+
+def _related_work(about: dict) -> dict:
+    """Closest published work for the paper; the paper itself is left out if the search finds it."""
+    queries = about["search_queries"]
+    try:
+        found = retrieve_papers(queries)
+    except Exception as e:  # the analysis must survive a literature-search failure
+        return {"papers": [], "queries": queries, "errors": [str(e)]}
+    papers = [p for p in found["papers"] if p.get("abstract")] or found["papers"]
+    own = _tokens(about["title"])
+
+    def is_itself(p: dict) -> bool:
+        t = _tokens(p["title"])
+        return bool(own and t) and len(own & t) / max(len(own), len(t)) >= 0.85
+
+    papers = [p for p in papers if not is_itself(p)]
+    rows = []
+    if papers:
+        sims, _ = score_papers(" ".join([about["title"], about["summary"], about["problem"], about["method"], " ".join(about["keywords"])]), papers)
+        for p, sim in sorted(zip(papers, sims), key=lambda pair: -pair[1])[:8]:
+            rows.append({"title": p["title"], "year": p.get("year"), "venue": p.get("venue") or "", "citations": p.get("citations"),
+                         "url": p.get("url") or "", "similarity": round(sim, 3)})
+    return {"papers": rows, "queries": queries, "errors": found["errors"]}
+
+
+def analyse_standalone(filename: str, data: bytes) -> dict:
+    """Everything the student needs from one uploaded paper, with no project behind it."""
+    text, pages = extract_text(filename, data)
+    sections = split_sections(text)
+    body = "\n".join(s["text"] for s in sections if s["key"] != "references")
+    checks = quality_checks(sections, body)
+    repro = reproducibility(body)
+
+    method, llm_note = "llm", None
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        analysing, describing = pool.submit(_llm_analyse, sections), pool.submit(_llm_describe, text, sections)
+        try:
+            raw = analysing.result()
+        except llm_service.LLMUnavailable as e:
+            raw = _fallback_analyse(sections, body, checks)
+            method, llm_note = "heuristic", str(e)
+        try:
+            described = describing.result()
+        except llm_service.LLMUnavailable as e:
+            described = _fallback_describe(text, sections, body, filename)
+            method, llm_note = "heuristic", str(e)
+
+    about = _clean_about(described, _first_line(text, filename))
+    related = _related_work(about)
+    refs = analyse_references(sections, body, related["papers"])
+    for row, coverage in zip(related["papers"], refs["related_coverage"]):
+        row["cited"] = coverage["cited"]
+
+    analysis = _clean_analysis(raw)
+    order = {"high": 0, "medium": 1, "low": 2}
+    llm_fixes = [{"priority": _pick(f.get("priority"), tuple(order), "medium"), "section": str(f.get("section") or ""),
+                  "issue": str(f.get("issue") or ""), "fix": str(f.get("fix") or "")}
+                 for f in raw.get("fixes") or [] if isinstance(f, dict) and f.get("issue")]
+    return {
+        "standalone": True,
+        "file": {"name": filename[:200], "size": len(data), "pages": pages, "words": checks["words"]},
+        "about": about,
+        "related": related,
+        "analysis": analysis,
+        "score": _score(analysis, raw.get("review") or {}, checks, refs, repro),
+        "summary": str(raw.get("summary") or ""),
+        "strengths": [str(s) for s in raw.get("strengths") or []][:4],
+        "fixes": sorted(llm_fixes + _rule_fixes(analysis, checks, refs, repro), key=lambda f: order[f["priority"]])[:10],
         "outline": [{"key": s["key"], "title": SECTION_NAMES.get(s["key"], s["title"]), "words": _words(s["text"])} for s in sections],
         "checks": checks,
         "references": refs,
