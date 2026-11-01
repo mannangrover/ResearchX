@@ -18,7 +18,7 @@
 .lp-links a { color: var(--text-2); font-size: var(--fs-sm); font-weight: 500; }
 .lp-links a:hover { color: var(--text); text-decoration: none; }
 .lp-actions { margin-left: auto; display: flex; align-items: center; gap: var(--s-2); }
-.lp-menu-btn, .lp-menu-theme { display: none; }
+.lp-nav .lp-menu-btn, .lp-nav .lp-menu-theme { display: none; }
 .lp-error { margin-top: var(--s-3); color: var(--danger); font-size: var(--fs-sm); }
 
 /* ---------- hero ---------- */
@@ -181,14 +181,14 @@
 @media (max-width: 760px) {
   .lp-wrap { padding: 0 var(--s-4); }
   .lp-actions .lp-theme-desktop { display: none; }
-  .lp-menu-btn { display: inline-grid; }
+  .lp-nav .lp-menu-btn { display: inline-grid; }
   .lp-links {
     display: none; position: absolute; top: var(--topbar-h); left: 0; right: 0; flex-direction: column; gap: 0;
     padding: var(--s-2) var(--s-4) var(--s-4); background: var(--bg); border-bottom: 1px solid var(--border); box-shadow: var(--shadow-lg);
   }
   .lp-links.open { display: flex; }
   .lp-links a { padding: var(--s-3) 0; font-size: var(--fs-body); border-bottom: 1px solid var(--border); }
-  .lp-menu-theme { display: flex; align-items: center; justify-content: space-between; padding-top: var(--s-3); color: var(--muted); font-size: var(--fs-sm); }
+  .lp-nav .lp-menu-theme { display: flex; align-items: center; justify-content: space-between; padding-top: var(--s-3); color: var(--muted); font-size: var(--fs-sm); }
   .lp-hero { padding: var(--s-8) 0 var(--s-7); }
   .lp-section { padding: var(--s-8) 0; }
   .lp-steps, .lp-plans { grid-template-columns: 1fr; }

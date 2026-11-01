@@ -77,6 +77,7 @@ const PATHS = {
       <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
     </>
   ),
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   lock: (
     <>
       <rect x="4" y="11" width="16" height="10" rx="2" />

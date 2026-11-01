@@ -287,7 +287,7 @@ export default function LandingPage({ onLogin, onSignup, onDemo, demoBusy, demoE
               aria-label={menuOpen ? "Close menu" : "Open menu"}
               onClick={() => setMenuOpen((v) => !v)}
             >
-              <Icon name={menuOpen ? "x" : "layers"} size={18} />
+              <Icon name={menuOpen ? "x" : "menu"} size={18} />
             </button>
           </div>
         </div>
