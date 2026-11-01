@@ -29,6 +29,8 @@ This repository implements stages 1–8 and 10 of the 10-stage workflow in the S
 
 The sidebar's **Analyse a Paper** button needs no project: upload a PDF, Word, LaTeX, Markdown or text file to get what the paper is about, whether it answers its own questions, whether its claims are backed by its results, the closest published work, a score with fixes, and comparisons between revised drafts. Analyses are private to the account and share the trash with projects.
 
+Only research papers are scored. Notes, assignments, slides and similar documents are refused with what they appear to be, here and in stage 8, and nothing is saved. No score gives marks by default: whatever a document or project does not show earns 0.
+
 ## Architecture
 
 ```

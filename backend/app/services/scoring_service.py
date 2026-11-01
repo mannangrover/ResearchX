@@ -3,7 +3,8 @@
 The score is deliberately transparent: every dimension is computed from
 measurable signals (literature similarity, repository structure, field
 activity) and carries the reasons that produced it. The LLM is only used
-to explain the result, never to invent the numbers.
+to explain the result, never to invent the numbers. Every dimension starts at
+0: marks come only from evidence, and missing evidence earns nothing.
 """
 import math
 import re
@@ -43,11 +44,16 @@ def _dim(key: str, score: float, reasons: list[str], signals: dict) -> dict:
 def novelty_space(lit: dict) -> dict:
     papers = lit["papers"]
     if not papers:
-        return _dim("novelty_space", 5, ["No related papers could be retrieved, so overlap is unknown; treat with caution."], {})
+        return _dim("novelty_space", 0, ["No related papers could be retrieved, so novelty cannot be measured and earns no marks."], {"measured": False})
     lo, hi = SIM_RANGE.get(lit["embedding_backend"], SIM_RANGE["tfidf"])
     sims = [p["similarity"] for p in papers]
     top = papers[0]
     top5 = sum(sims[:5]) / min(5, len(sims))
+    if sims[0] < lo:
+        # A search that found nothing relevant is not evidence of novelty
+        return _dim("novelty_space", 0, [f"No closely related paper was found (closest similarity {sims[0]:.2f}), so novelty cannot be measured "
+                                         "and earns no marks. Describe the idea more specifically or refine the search queries."],
+                    {"measured": False, "max_similarity": round(sims[0], 3), "top5_mean_similarity": round(top5, 3)})
     overlap = 0.6 * _norm(sims[0], lo, hi) + 0.4 * _norm(top5, lo, hi)
     level = "high" if overlap > 0.66 else "moderate" if overlap > 0.33 else "low"
     reasons = [
@@ -69,7 +75,7 @@ def novelty_space(lit: dict) -> dict:
 
 def technical_depth(profile: dict, repo: dict | None, idea: str) -> dict:
     techniques = profile.get("techniques", [])
-    reasons, score = [], 1.0
+    reasons, score = [], 0.0
     t_pts = min(3.5, 0.7 * len(techniques))
     score += t_pts
     if techniques:
@@ -89,28 +95,31 @@ def technical_depth(profile: dict, repo: dict | None, idea: str) -> dict:
         reasons.append(f"Repository has {code} source files in {len(repo['languages'])} language(s) and {n_deps} declared dependencies.")
         signals.update(code_files=code, languages=len(repo["languages"]), dependencies=n_deps)
     else:
+        # Length alone proves nothing: a longer description only counts when it names techniques
         words = len(idea.split())
-        score += min(2.5, words / 80)
-        reasons.append(f"Idea-only submission ({words} words); depth estimated from the description.")
+        if techniques:
+            score += min(2.5, words / 80)
+        reasons.append(f"Idea-only submission ({words} words); depth estimated from the techniques it names."
+                       if techniques else "No techniques identified, so no depth could be shown.")
     return _dim("technical_depth", score, reasons, signals)
 
 
 def feasibility(repo: dict | None, idea: str, lit: dict) -> dict:
-    score, reasons = 3.0, []
+    score, reasons = 0.0, []
     mentions_eval = bool(re.search(EVAL_TERMS, idea, re.I))
     if repo:
         if repo["code_file_count"] >= 5:
-            score += 3
+            score += 4
             reasons.append("A working code base already exists, so experiments can start immediately.")
         if repo["signals"]["has_dependency_file"]:
-            score += 1.5
+            score += 2
             reasons.append("Dependencies are declared, so the environment is reproducible.")
         if repo["signals"]["has_license"]:
             score += 0.5
     else:
         reasons.append("No repository yet — implementation effort must be planned.")
     if mentions_eval:
-        score += 1.5
+        score += 2.5
         reasons.append("The description mentions datasets/metrics/evaluation.")
     else:
         reasons.append("No dataset or evaluation metric mentioned yet.")
@@ -129,9 +138,8 @@ def impact(lit: dict, repo: dict | None) -> dict:
         f"({'an active' if recent >= 0.4 else 'a slower-moving'} area).",
     ]
     if cites is None:
-        # No citation data (arXiv-only results): use a neutral midpoint instead of penalising
-        cite_pts = 1.5
-        reasons.append("Citation counts unavailable for the retrieved papers; a neutral value was used.")
+        cite_pts = 0.0
+        reasons.append("Citation counts unavailable for the retrieved papers, so they earn no marks.")
     else:
         cite_pts = min(3.0, math.log10(1 + cites) * 1.2)
         reasons.append(f"Median citation count of related work: {cites:g}.")
@@ -144,7 +152,7 @@ def impact(lit: dict, repo: dict | None) -> dict:
 
 def reproducibility(repo: dict | None) -> dict:
     if not repo:
-        return _dim("reproducibility", 3, ["No code submitted yet — reproducibility cannot be assessed; plan to release code and data."], {})
+        return _dim("reproducibility", 0, ["No code submitted yet, so there is nothing to reproduce and no marks. Submit a repository to earn them."], {})
     s = repo["signals"]
     checks = [
         ("README is detailed", repo.get("readme_length", 0) > 1500, 2.0),
@@ -171,7 +179,7 @@ def contribution(nov: dict, imp: dict, depth: dict) -> dict:
     reasons = ["Combines room in the literature (50%), field activity (30%) and technical depth (20%)."]
     if nov["score"] >= 6 and imp["score"] >= 5:
         reasons.append("Active field with room for a distinct contribution — a good position.")
-    elif nov["score"] < 4:
+    elif nov["score"] < 4 and nov["signals"].get("measured", True):
         reasons.append("High overlap limits contribution unless the project is modified.")
     return _dim("contribution", score, reasons, {})
 

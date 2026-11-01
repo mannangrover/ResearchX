@@ -16,7 +16,7 @@ RUBRIC = {
                    "(existing code, data, evaluation plan, reusable baselines).",
     "impact": "How active and important the research area is and how much the result would matter.",
     "reproducibility": "How easily others could reproduce the work (code, dependencies, tests, CI, docs, licence). "
-                       "If there is no code, judge only what is planned.",
+                       "If there is no code, score 0.",
     "contribution": "Overall potential for a distinct, publishable contribution.",
 }
 
@@ -73,6 +73,7 @@ def llm_score(project: dict) -> dict:
 {build_evidence(project)}
 
 Score each dimension from 0 to 10 (one decimal allowed). 0-3 = weak, 4-6 = moderate, 7-10 = strong.
+Marks must be earned: when the evidence shows nothing for a dimension, score 0, never a middle value by default.
 Use the full range and be critical; do not default to middle values.
 {rubric}
 
