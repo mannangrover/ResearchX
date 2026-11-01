@@ -2,11 +2,16 @@ import threading
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from . import database
 from .config import settings
 from .routers import papers, projects
 from .services import llm_service, similarity_service
+
+# Without Supabase the app has no login and one shared database, which must never be public
+if settings.REQUIRE_AUTH and not settings.auth_enabled:
+    raise RuntimeError("REQUIRE_AUTH is set, but SUPABASE_URL and SUPABASE_ANON_KEY are missing")
 
 app = FastAPI(
     title="ResearchX API",
@@ -51,3 +56,8 @@ def auth_config():
         "demo": {"email": settings.DEMO_EMAIL, "password": settings.DEMO_PASSWORD}
         if settings.DEMO_EMAIL and settings.DEMO_PASSWORD else None,
     }
+
+
+# Last, so the API routes above take priority
+if settings.STATIC_DIR:
+    app.mount("/", StaticFiles(directory=settings.STATIC_DIR, html=True), name="frontend")

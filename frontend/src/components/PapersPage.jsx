@@ -46,6 +46,10 @@ export default function PapersPage({ papers, onChanged, onOpen }) {
       </header>
 
       <UploadForm busy={busy} withNote={false} onSubmit={analyse} />
+      <p className="small muted paper-privacy">
+        The text of your paper is sent to Google Gemini for analysis. Your file is not stored, only the results. Avoid uploading
+        anything confidential.
+      </p>
       <div aria-live="polite">
         {busy && (
           <Alert kind="info">

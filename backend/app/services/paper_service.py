@@ -41,6 +41,7 @@ from .literature_service import retrieve_papers
 from .similarity_service import score_papers
 
 MAX_BYTES = 15 * 1024 * 1024
+MAX_DOCX_XML_BYTES = 100 * 1024 * 1024  # a small .docx can unzip to gigabytes
 EXTENSIONS = {"pdf", "docx", "tex", "md", "txt"}
 
 SECTION_PATTERNS = [
@@ -105,7 +106,10 @@ def extract_text(filename: str, data: bytes) -> tuple[str, int | None]:
             pages = len(reader.pages)
             text = "\n".join(page.extract_text() or "" for page in reader.pages)
         elif ext == "docx":
-            xml = zipfile.ZipFile(io.BytesIO(data)).read("word/document.xml").decode("utf8")
+            archive = zipfile.ZipFile(io.BytesIO(data))
+            if archive.getinfo("word/document.xml").file_size > MAX_DOCX_XML_BYTES:
+                raise HTTPException(413, "The document is too large to read")
+            xml = archive.read("word/document.xml").decode("utf8")
             xml = re.sub(r"</w:p>", "\n", xml)
             xml = re.sub(r"<w:tab/>", " ", xml)
             text = html.unescape(re.sub(r"<[^>]+>", "", xml))
@@ -673,13 +677,13 @@ def _related_work(about: dict) -> dict:
         return bool(own and t) and len(own & t) / max(len(own), len(t)) >= 0.85
 
     papers = [p for p in papers if not is_itself(p)]
-    rows = []
+    rows, backend = [], None
     if papers:
-        sims, _ = score_papers(" ".join([about["title"], about["summary"], about["problem"], about["method"], " ".join(about["keywords"])]), papers)
+        sims, backend = score_papers(" ".join([about["title"], about["summary"], about["problem"], about["method"], " ".join(about["keywords"])]), papers)
         for p, sim in sorted(zip(papers, sims), key=lambda pair: -pair[1])[:8]:
             rows.append({"title": p["title"], "year": p.get("year"), "venue": p.get("venue") or "", "citations": p.get("citations"),
                          "url": p.get("url") or "", "similarity": round(sim, 3)})
-    return {"papers": rows, "queries": queries, "errors": found["errors"]}
+    return {"papers": rows, "queries": queries, "errors": found["errors"], "embedding_backend": backend}
 
 
 def analyse_standalone(filename: str, data: bytes) -> dict:

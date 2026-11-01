@@ -3,12 +3,13 @@
    Type: Newsreader (display) + IBM Plex Sans (UI) · 4px spacing · radius 6 / 10 / 16
    ========================================================================= */
 :root {
-  --bg: #ffffff;
-  --surface: #ffffff;
-  --surface-2: #f5f6f8;
-  --surface-3: #ebedf1;
-  --border: #e2e5ea;
-  --border-strong: #c9ced6;
+  --bg: #faf9f5;
+  --surface: #fefdfa;
+  --chrome: #f4f3ed;
+  --surface-2: #f2f1ea;
+  --surface-3: #e8e6dd;
+  --border: #e3e1d7;
+  --border-strong: #c9c7bb;
   --text: #10131a;
   --text-2: #3a404c;
   --muted: #5e6572;
@@ -19,9 +20,9 @@
   --primary-ring: rgba(36, 81, 214, 0.26);
   --on-primary: #ffffff;
 
-  --ok: #11795a;
+  --ok: #0f7053;
   --ok-soft: #e5f4ee;
-  --warn: #9c5a00;
+  --warn: #925400;
   --warn-soft: #fcf1df;
   --danger: #bf2c2c;
   --danger-soft: #fcebeb;
@@ -62,30 +63,31 @@
   color-scheme: light;
 }
 
-/* Dark theme: black background. Chosen explicitly (data-theme="dark") or by the OS when set to "system". */
+/* Dark theme: near-black with a cool blue accent, easier on the eyes than pure black. Chosen explicitly (data-theme="dark") or by the OS when set to "system". */
 :root[data-theme="dark"] {
-  --bg: #000000;
-  --surface: #0a0b0d;
-  --surface-2: #121418;
-  --surface-3: #1b1e24;
-  --border: #22262d;
-  --border-strong: #363b44;
-  --text: #edeff3;
-  --text-2: #c4c9d2;
-  --muted: #8f97a4;
-  --primary: #7c9cff;
-  --primary-hover: #9bb4ff;
-  --primary-soft: #121b33;
+  --bg: #121211;
+  --surface: #1b1b1a;
+  --chrome: #0e0e0d;
+  --surface-2: #242423;
+  --surface-3: #2f2f2d;
+  --border: #2c2c2a;
+  --border-strong: #484844;
+  --text: #ecebe5;
+  --text-2: #cfcdc4;
+  --muted: #b6b4aa;
+  --primary: #96afff;
+  --primary-hover: #a9bdff;
+  --primary-soft: #212944;
   --primary-ring: rgba(124, 156, 255, 0.35);
   --on-primary: #050914;
-  --ok: #45c48f;
-  --ok-soft: #0c2219;
-  --warn: #efaf4a;
-  --warn-soft: #2a1e0a;
-  --danger: #ff7b7b;
-  --danger-soft: #331515;
-  --ink: #000000;
-  --ink-2: #0a0b0d;
+  --ok: #55cf9b;
+  --ok-soft: #16291f;
+  --warn: #f0b65a;
+  --warn-soft: #2f2513;
+  --danger: #ff8f8a;
+  --danger-soft: #371e1a;
+  --ink: #0e0e0d;
+  --ink-2: #1b1b1a;
   --shadow-sm: none;
   --shadow: none;
   --shadow-lg: 0 16px 40px -16px rgba(0, 0, 0, 0.8);
@@ -93,28 +95,29 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #000000;
-    --surface: #0a0b0d;
-    --surface-2: #121418;
-    --surface-3: #1b1e24;
-    --border: #22262d;
-    --border-strong: #363b44;
-    --text: #edeff3;
-    --text-2: #c4c9d2;
-    --muted: #8f97a4;
-    --primary: #7c9cff;
-    --primary-hover: #9bb4ff;
-    --primary-soft: #121b33;
+    --bg: #121211;
+    --surface: #1b1b1a;
+  --chrome: #0e0e0d;
+    --surface-2: #242423;
+    --surface-3: #2f2f2d;
+    --border: #2c2c2a;
+    --border-strong: #484844;
+    --text: #ecebe5;
+    --text-2: #cfcdc4;
+    --muted: #b6b4aa;
+    --primary: #96afff;
+    --primary-hover: #a9bdff;
+    --primary-soft: #212944;
     --primary-ring: rgba(124, 156, 255, 0.35);
     --on-primary: #050914;
-    --ok: #45c48f;
-    --ok-soft: #0c2219;
-    --warn: #efaf4a;
-    --warn-soft: #2a1e0a;
-    --danger: #ff7b7b;
-    --danger-soft: #331515;
-    --ink: #000000;
-    --ink-2: #0a0b0d;
+    --ok: #55cf9b;
+    --ok-soft: #16291f;
+    --warn: #f0b65a;
+    --warn-soft: #2f2513;
+    --danger: #ff8f8a;
+    --danger-soft: #371e1a;
+    --ink: #0e0e0d;
+    --ink-2: #1b1b1a;
     --shadow-sm: none;
     --shadow: none;
     --shadow-lg: 0 16px 40px -16px rgba(0, 0, 0, 0.8);
@@ -245,7 +248,7 @@ code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-siz
 .topbar {
   position: sticky; top: 0; z-index: 20; height: var(--topbar-h);
   display: flex; align-items: center; gap: 14px; padding: 0 20px;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  background: color-mix(in srgb, var(--chrome) 88%, transparent);
   backdrop-filter: saturate(1.4) blur(10px);
   border-bottom: 1px solid var(--border);
 }
@@ -290,7 +293,7 @@ code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-siz
 .sidebar {
   position: sticky; top: var(--topbar-h); height: calc(100vh - var(--topbar-h));
   display: flex; flex-direction: column; gap: 14px; padding: 16px 12px;
-  background: var(--surface); border-right: 1px solid var(--border);
+  background: var(--chrome); border-right: 1px solid var(--border);
 }
 .sidebar .btn.is-current { box-shadow: 0 0 0 3px var(--primary-ring); }
 .search {
@@ -750,6 +753,8 @@ textarea { resize: vertical; line-height: 1.5; }
 .tier-rules { margin-top: 14px; }
 .page-title { font-family: var(--font-display); font-size: 1.9rem; font-weight: 600; letter-spacing: -0.01em; }
 .paper-page-intro { max-width: var(--measure); margin: 6px 0 var(--s-5); color: var(--text-2); }
+.projects-page > header:has(.paper-page-intro) { margin-bottom: var(--s-5); }
+.paper-privacy { margin-top: var(--s-3); }
 .papers-list { margin-top: var(--s-6); }
 .papers-list h2 { font-size: var(--fs-h3); font-weight: 600; margin-bottom: var(--s-3); }
 .pt-delete { width: 52px; text-align: right; }

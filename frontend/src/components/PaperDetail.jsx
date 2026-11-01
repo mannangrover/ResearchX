@@ -63,8 +63,10 @@ function Related({ paper }) {
   return (
     <>
       <p className="paper-summary">
-        The closest published paper is {closeness(rows[0].similarity)} (similarity {rows[0].similarity.toFixed(2)}). The paper
-        cites {rows.filter((r) => r.cited).length} of these {rows.length}.
+        {paper.related.embedding_backend === "tfidf"
+          ? `The closest published paper has a similarity of ${rows[0].similarity.toFixed(2)}, measured by shared keywords only because the AI comparison was unavailable. `
+          : `The closest published paper is ${closeness(rows[0].similarity)} (similarity ${rows[0].similarity.toFixed(2)}). `}
+        The paper cites {rows.filter((r) => r.cited).length} of these {rows.length}.
       </p>
       <ul className="related-list">
         {rows.map((r) => (

@@ -21,7 +21,7 @@ DIMENSIONS = {
 }
 
 # Similarity ranges differ a lot between TF-IDF and dense embeddings
-SIM_RANGE = {"tfidf": (0.03, 0.25), "sentence-transformers": (0.40, 0.92)}
+SIM_RANGE = {"tfidf": (0.03, 0.25), "sentence-transformers": (0.40, 0.92), "gemini": (0.40, 0.92)}
 
 EVAL_TERMS = r"\b(dataset|benchmark|evaluat\w*|accuracy|f1|precision|recall|baseline|metric\w*|experiment\w*|latency|throughput|user study)\b"
 ML_HINTS = ("learning", "neural", "transformer", "llm", "embedding", "vision", "nlp", "graph", "reinforcement", "rag")

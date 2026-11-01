@@ -53,8 +53,8 @@ def _get(client: httpx.Client, url: str, **kw) -> httpx.Response:
         reset = r.headers.get("x-ratelimit-reset")
         when = f" It resets at {datetime.fromtimestamp(int(reset)):%H:%M}." if reset else ""
         raise GitHubError(
-            "GitHub API rate limit reached (60 requests/hour without a token)." + when
-            + " Add a free GITHUB_TOKEN in backend/.env for 5000/hour."
+            "GitHub API rate limit reached." + when
+            + " Try again later."
         )
     r.raise_for_status()
     return r

@@ -33,7 +33,7 @@ class Settings:
     MAX_PAPERS_PER_SOURCE: int = int(os.getenv("MAX_PAPERS_PER_SOURCE", "15"))
     TOP_K_PAPERS: int = int(os.getenv("TOP_K_PAPERS", "10"))
 
-    # Embeddings: "auto" uses sentence-transformers if installed, else TF-IDF
+    # Embeddings: "auto" uses sentence-transformers if installed, else TF-IDF; "gemini" needs no local model
     EMBEDDING_BACKEND: str = os.getenv("EMBEDDING_BACKEND", "auto")
     # A local copy in backend/models/ is used when present (works offline)
     EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL") or (
@@ -41,6 +41,13 @@ class Settings:
         if (BASE_DIR / "models" / "all-MiniLM-L6-v2" / "tokenizer.json").exists()
         else "all-MiniLM-L6-v2"
     )
+
+    # Hosting (all set in the Dockerfile; local runs leave them off)
+    REQUIRE_AUTH: bool = os.getenv("REQUIRE_AUTH", "").lower() == "true"  # refuse to start without Supabase
+    STATIC_DIR: str = os.getenv("STATIC_DIR", "")  # built frontend, served by the API when set
+    # Actions per UTC day that call the AI and paper APIs; 0 means no limit
+    DAILY_LIMIT_PER_USER: int = int(os.getenv("DAILY_LIMIT_PER_USER", "0"))
+    DAILY_LIMIT_TOTAL: int = int(os.getenv("DAILY_LIMIT_TOTAL", "0"))
 
     CORS_ORIGINS: list[str] = os.getenv(
         "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 
 from ..auth import User, current_user
+from ..limits import ai_quota
 from ..schemas import LiteratureRequest, PaperUpload, PlanOptions, ProjectCreate, ProposalUpdate, RefineMessage
 from ..services import experiment_service, guidance_service, paper_service, pipeline, refinement_service, versions_service
 from ..services.github_service import GitHubError, parse_repo_url
@@ -70,7 +71,7 @@ def delete_forever(pid: str, user: User = Depends(current_user)):
     store.delete_project(pid)
 
 
-@router.post("/{pid}/analyze")
+@router.post("/{pid}/analyze", dependencies=[Depends(ai_quota)])
 async def analyze(pid: str, user: User = Depends(current_user)):
     store = get_store(user)
     project = _get_or_404(store, pid)
@@ -81,7 +82,7 @@ async def analyze(pid: str, user: User = Depends(current_user)):
     return store.save_stage(pid, "profile", result, stage=2)
 
 
-@router.post("/{pid}/literature")
+@router.post("/{pid}/literature", dependencies=[Depends(ai_quota)])
 async def literature(pid: str, body: LiteratureRequest | None = None, user: User = Depends(current_user)):
     store = get_store(user)
     project = _get_or_404(store, pid)
@@ -90,8 +91,8 @@ async def literature(pid: str, body: LiteratureRequest | None = None, user: User
     result = await run_in_threadpool(pipeline.run_literature, project, body.queries if body else None)
     if not result["papers"]:
         if result["errors"]:
-            detail = ("The paper sources are busy or rate-limited right now. Wait about 30 seconds and try again"
-                      " (adding OpenAlex / Semantic Scholar keys in backend/.env avoids this). Details: "
+            detail = ("The paper sources are busy or rate-limited right now. Wait about 30 seconds and try again."
+                      " Details: "
                       + "; ".join(result["errors"]))
         else:
             detail = "No related papers found. Try simpler or broader search queries."
@@ -99,7 +100,7 @@ async def literature(pid: str, body: LiteratureRequest | None = None, user: User
     return store.save_stage(pid, "literature", result, stage=3)
 
 
-@router.post("/{pid}/score")
+@router.post("/{pid}/score", dependencies=[Depends(ai_quota)])
 async def score(pid: str, user: User = Depends(current_user)):
     store = get_store(user)
     project = _get_or_404(store, pid)
@@ -121,7 +122,7 @@ def _refine_stage(state: dict) -> int:
     return 6 if state.get("approved") else 4
 
 
-@router.post("/{pid}/refine/start")
+@router.post("/{pid}/refine/start", dependencies=[Depends(ai_quota)])
 async def refine_start(pid: str, user: User = Depends(current_user)):
     store = get_store(user)
     project = _scored_or_409(store, pid)
@@ -129,7 +130,7 @@ async def refine_start(pid: str, user: User = Depends(current_user)):
     return store.save_stage(pid, "refinement", state, stage=_refine_stage(state))
 
 
-@router.post("/{pid}/refine/message")
+@router.post("/{pid}/refine/message", dependencies=[Depends(ai_quota)])
 async def refine_message(pid: str, body: RefineMessage, user: User = Depends(current_user)):
     store = get_store(user)
     project = _scored_or_409(store, pid)
@@ -137,7 +138,7 @@ async def refine_message(pid: str, body: RefineMessage, user: User = Depends(cur
     return store.save_stage(pid, "refinement", state, stage=_refine_stage(state))
 
 
-@router.post("/{pid}/refine/propose")
+@router.post("/{pid}/refine/propose", dependencies=[Depends(ai_quota)])
 async def refine_propose(pid: str, user: User = Depends(current_user)):
     store = get_store(user)
     project = _scored_or_409(store, pid)
@@ -160,7 +161,7 @@ def refine_reset(pid: str, user: User = Depends(current_user)):
     return store.save_stage(pid, "refinement", None, stage=4)
 
 
-@router.post("/{pid}/refine/apply")
+@router.post("/{pid}/refine/apply", dependencies=[Depends(ai_quota)])
 async def refine_apply(pid: str, user: User = Depends(current_user)):
     """Turn the approved proposal into a NEW VERSION of this project.
 
@@ -192,7 +193,7 @@ def switch_version(pid: str, number: int, user: User = Depends(current_user)):
 
 
 # ---------------------------------------------------------------- stage 7: experiment planning
-@router.post("/{pid}/plan")
+@router.post("/{pid}/plan", dependencies=[Depends(ai_quota)])
 async def plan(pid: str, body: PlanOptions | None = None, user: User = Depends(current_user)):
     store = get_store(user)
     project = _scored_or_409(store, pid)
@@ -202,7 +203,7 @@ async def plan(pid: str, body: PlanOptions | None = None, user: User = Depends(c
 
 
 # ---------------------------------------------------------------- stage 8: paper evaluation
-@router.post("/{pid}/paper")
+@router.post("/{pid}/paper", dependencies=[Depends(ai_quota)])
 async def paper(pid: str, body: PaperUpload, user: User = Depends(current_user)):
     store = get_store(user)
     project = _scored_or_409(store, pid)  # the plan (stage 7) is optional: the paper is compared with it when it exists

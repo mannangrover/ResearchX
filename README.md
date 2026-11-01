@@ -111,6 +111,24 @@ cd frontend && npm run dev
 
 Open http://localhost:5173. API docs (Swagger) are at http://localhost:8000/docs.
 
+## Host it
+
+The [Dockerfile](Dockerfile) builds the frontend and serves it from the API as one web service, so
+any host that runs containers works. [render.yaml](render.yaml) sets it up on Render.
+
+The container refuses to start without Supabase, because the local mode has no login. It uses Gemini
+embeddings to fit small servers, falling back to TF-IDF when they are unavailable, and allows 30 AI
+actions per user and 300 in total per UTC day
+(`DAILY_LIMIT_PER_USER`, `DAILY_LIMIT_TOTAL`). The counts are kept in memory, so a restart clears them.
+
+Do not set these on a public host:
+
+- `DEMO_PASSWORD`: the login page would hand the shared password to every visitor.
+- `SUPABASE_SECRET_KEY`: only the demo account script uses it, and it bypasses Row-Level Security.
+
+After the first deploy, in Supabase under Authentication → URL Configuration, set **Site URL** to the
+address of the site and add it to **Redirect URLs**, so that password reset links lead back to it.
+
 ## Test
 
 End-to-end smoke test of all five stages against the live APIs:

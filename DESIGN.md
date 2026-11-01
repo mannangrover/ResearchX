@@ -2,7 +2,7 @@
 
 **Direction — "evidence, annotated."** ResearchX tells students where their idea
 stands in the published literature. The look borrows from the tools of that world:
-white paper or black screen, blue ink for actions, and journal-style serif
+off-white paper or a near-black screen, cool blue ink for actions, and journal-style serif
 headlines over a precise technical sans. Inspired by the restraint of linear.app and
 stripe.com (left-aligned type, real product UI as imagery, one action colour),
 without copying either.
@@ -17,21 +17,22 @@ values under `[data-theme="dark"]` and `prefers-color-scheme: dark`).
 
 | Token | Light | Dark | Role |
 |---|---|---|---|
-| `--bg` | `#FFFFFF` | `#000000` | Page background (pure white / pure black, by request) |
-| `--surface` | `#FFFFFF` | `#0A0B0D` | Panels and cards |
-| `--surface-2` | `#F5F6F8` | `#121418` | Insets, table headers, quiet fills |
-| `--surface-3` | `#EBEDF1` | `#1B1E24` | Tracks, skeletons, hover on insets |
-| `--border` | `#E2E5EA` | `#22262D` | Hairlines and card outlines |
-| `--border-strong` | `#C9CED6` | `#363B44` | Inputs, emphasised outlines |
-| `--text` | `#10131A` | `#EDEFF3` | Headings and body text (ink) |
-| `--text-2` | `#3A404C` | `#C4C9D2` | Secondary text |
-| `--muted` | `#5E6572` | `#8F97A4` | Captions, metadata (≥ 4.5:1 on bg) |
-| `--primary` | `#2451D6` | `#7C9CFF` | Cobalt ink: buttons, links, selection, focus |
-| `--primary-hover` | `#1B40AE` | `#9BB4FF` | Hover on primary |
-| `--primary-soft` | `#EDF1FD` | `#121B33` | Selected rows and tabs |
-| `--ok` / `--ok-soft` | `#11795A` / `#E5F4EE` | `#45C48F` / `#0C2219` | Success, done stages |
-| `--warn` / `--warn-soft` | `#9C5A00` / `#FCF1DF` | `#EFAF4A` / `#2A1E0A` | Warnings, partial results |
-| `--danger` / `--danger-soft` | `#BF2C2C` / `#FCEBEB` | `#FF7B7B` / `#331515` | Errors, destructive actions |
+| `--bg` | `#FAF9F5` | `#121211` | Page background (off-white and near-black, not pure white or black, to reduce eye strain) |
+| `--surface` | `#FEFDFA` | `#1B1B1A` | Panels and cards |
+| `--chrome` | `#F4F3ED` | `#0E0E0D` | Sidebar and top bar |
+| `--surface-2` | `#F2F1EA` | `#242423` | Insets, table headers, quiet fills |
+| `--surface-3` | `#E8E6DD` | `#2F2F2D` | Tracks, skeletons, hover on insets |
+| `--border` | `#E3E1D7` | `#2C2C2A` | Hairlines and card outlines |
+| `--border-strong` | `#C9C7BB` | `#484844` | Inputs, emphasised outlines |
+| `--text` | `#10131A` | `#ECEBE5` | Headings and body text (ink) |
+| `--text-2` | `#3A404C` | `#CFCDC4` | Secondary text |
+| `--muted` | `#5E6572` | `#B6B4AA` | Captions, metadata (≥ 4.5:1 on bg) |
+| `--primary` | `#2451D6` | `#96AFFF` | Cobalt ink: buttons, links, selection, focus |
+| `--primary-hover` | `#1B40AE` | `#A9BDFF` | Hover on primary |
+| `--primary-soft` | `#EDF1FD` | `#212944` | Selected rows and tabs |
+| `--ok` / `--ok-soft` | `#0F7053` / `#E5F4EE` | `#55CF9B` / `#16291F` | Success, done stages |
+| `--warn` / `--warn-soft` | `#925400` / `#FCF1DF` | `#F0B65A` / `#2F2513` | Warnings, partial results |
+| `--danger` / `--danger-soft` | `#BF2C2C` / `#FCEBEB` | `#FF8F8A` / `#371E1A` | Errors, destructive actions |
 
 Rules: one primary action per view. No gradients as decoration.
 

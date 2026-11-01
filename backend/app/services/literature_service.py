@@ -46,7 +46,7 @@ def search_semantic_scholar(query: str, limit: int) -> list[dict]:
         r.raise_for_status()
         break
     else:
-        raise RuntimeError("rate limited (429) — add SEMANTIC_SCHOLAR_API_KEY in backend/.env")
+        raise RuntimeError("rate limited, try again in a minute")
 
     papers = []
     for p in r.json().get("data", []) or []:
@@ -215,8 +215,7 @@ def _search_source(name: str, fn, queries: list[str], limit: int) -> tuple[list[
             found += result
         except httpx.HTTPStatusError as e:
             code = e.response.status_code
-            hint = " (rate limited, try again in a minute)" if name == "arXiv" else " (rate limited — add an API key in backend/.env)"
-            return found, f"{name}: HTTP {code}" + (hint if code == 429 else "")
+            return found, f"{name}: HTTP {code}" + (" (rate limited, try again in a minute)" if code == 429 else "")
         except Exception as e:
             return found, f"{name}: {e or type(e).__name__}"
     return found, None
