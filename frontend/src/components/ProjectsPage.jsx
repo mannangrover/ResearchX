@@ -79,7 +79,7 @@ export default function ProjectsPage({ projects, filter, onOpen, onNew, onDelete
 
   const removeSelected = async () => {
     const ids = [...selected];
-    if (!confirm(`Delete ${ids.length} project${ids.length > 1 ? "s" : ""}? This cannot be undone.`)) return;
+    if (!confirm(`Move ${ids.length} project${ids.length > 1 ? "s" : ""} to the trash? You can restore them for 30 days.`)) return;
     setDeleting(true);
     try {
       await Promise.all(ids.map((id) => api.deleteProject(id)));
@@ -126,7 +126,7 @@ export default function ProjectsPage({ projects, filter, onOpen, onNew, onDelete
               Clear
             </button>
             <button className="btn btn-danger btn-sm btn-secondary" disabled={deleting} onClick={removeSelected}>
-              <Icon name="trash" size={13} /> {deleting ? "Deleting…" : "Delete"}
+              <Icon name="trash" size={13} /> {deleting ? "Moving…" : "Move to Trash"}
             </button>
           </div>
         )}

@@ -34,7 +34,9 @@ export const api = {
   listProjects: () => request("/projects"),
   getProject: (id) => request(`/projects/${id}`),
   createProject: (body) => request("/projects", { method: "POST", body: JSON.stringify(body) }),
-  deleteProject: (id) => request(`/projects/${id}`, { method: "DELETE" }),
+  deleteProject: (id) => request(`/projects/${id}`, { method: "DELETE" }), // moves it to the trash
+  restoreProject: (id) => request(`/projects/${id}/restore`, { method: "POST" }),
+  deleteForever: (id) => request(`/projects/${id}/permanent`, { method: "DELETE" }),
   analyze: (id) => request(`/projects/${id}/analyze`, { method: "POST" }),
   literature: (id, queries) =>
     request(`/projects/${id}/literature`, {

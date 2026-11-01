@@ -41,6 +41,7 @@ def init_db() -> None:
                 paper       TEXT,
                 guidance    TEXT,
                 history     TEXT,
+                deleted_at  TEXT,
                 created_at  TEXT NOT NULL,
                 updated_at  TEXT NOT NULL
             )
@@ -48,7 +49,7 @@ def init_db() -> None:
         )
         # Migrate databases created before stages 6/7 and version history existed
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(projects)")}
-        for col in ("refinement", "plan", "paper", "guidance", "history"):
+        for col in ("refinement", "plan", "paper", "guidance", "history", "deleted_at"):
             if col not in columns:
                 conn.execute(f"ALTER TABLE projects ADD COLUMN {col} TEXT")
 
@@ -60,7 +61,8 @@ def _now() -> str:
 def _row_to_dict(row: sqlite3.Row) -> dict:
     d = dict(row)
     for col in JSON_COLUMNS:
-        d[col] = json.loads(d[col]) if d[col] else None
+        if col in d:  # list queries select only some columns
+            d[col] = json.loads(d[col]) if d[col] else None
     return d
 
 
@@ -80,7 +82,7 @@ def list_projects() -> list[dict]:
     """Project rows for the projects table, with a few summary fields from the stage results."""
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT id, title, github_url, domain, stage, created_at, updated_at, score, paper, guidance, history"
+            "SELECT id, title, github_url, domain, stage, created_at, updated_at, deleted_at, score, paper, guidance, history"
             " FROM projects ORDER BY updated_at DESC"
         ).fetchall()
     out = []
@@ -88,7 +90,7 @@ def list_projects() -> list[dict]:
         d = _row_to_dict(r)
         history = d.pop("history")
         out.append({
-            **{k: d[k] for k in ("id", "title", "github_url", "domain", "stage", "created_at", "updated_at")},
+            **{k: d[k] for k in ("id", "title", "github_url", "domain", "stage", "created_at", "updated_at", "deleted_at")},
             "ros": (d["score"] or {}).get("total"),
             "paper_score": ((d["paper"] or {}).get("score") or {}).get("total"),
             "tier": ((d["guidance"] or {}).get("tier") or {}).get("name"),
@@ -127,6 +129,18 @@ def update_project(pid: str, fields: dict) -> dict | None:
     with _connect() as conn:
         conn.execute(f"UPDATE projects SET {assignments}, updated_at = ? WHERE id = ?", (*values, _now(), pid))
     return get_project(pid)
+
+
+def set_trashed(pid: str, when: str | None) -> bool:
+    """Move a project to the trash (timestamp) or restore it (None); updated_at is left alone."""
+    with _connect() as conn:
+        cur = conn.execute("UPDATE projects SET deleted_at = ? WHERE id = ?", (when, pid))
+    return cur.rowcount > 0
+
+
+def purge_trash(before: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM projects WHERE deleted_at IS NOT NULL AND deleted_at < ?", (before,))
 
 
 def delete_project(pid: str) -> bool:

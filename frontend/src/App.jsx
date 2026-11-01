@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { api, configureAuth } from "./api";
 import Sidebar from "./components/Sidebar";
 import ProjectsPage from "./components/ProjectsPage";
+import TrashPage from "./components/TrashPage";
+import AccountPage from "./components/AccountPage";
 import NewProjectForm from "./components/NewProjectForm";
 import ProjectView from "./components/ProjectView";
 import AuthPage from "./components/AuthPage";
@@ -95,6 +97,7 @@ export default function App() {
   return (
     <Workspace
       key={user?.id || "local"}
+      supabase={supabase}
       user={user}
       isDemo={!!user && user.email === authConfig.demo?.email}
       onLogout={supabase ? () => supabase.auth.signOut() : null}
@@ -107,11 +110,11 @@ function initials(text) {
   return (parts[0]?.[0] || "?").toUpperCase() + (parts[1]?.[0] || "").toUpperCase();
 }
 
-// Pages live in the URL hash so the browser's Back button works: #/  #/new  #/project/<id>
+// Pages live in the URL hash so the browser's Back button works: #/  #/new  #/trash  #/account  #/project/<id>
 function parseHash() {
   const h = window.location.hash.replace(/^#\/?/, "");
   if (h.startsWith("project/")) return { view: "project", id: h.slice("project/".length) };
-  if (h === "new") return { view: "new" };
+  if (["new", "trash", "account"].includes(h)) return { view: h };
   return { view: "list" };
 }
 
@@ -119,9 +122,9 @@ const go = (hash) => {
   if (window.location.hash !== hash) window.location.hash = hash;
 };
 
-function Workspace({ user, isDemo, onLogout }) {
+function Workspace({ supabase, user, isDemo, onLogout }) {
   const [health, setHealth] = useState(null);
-  const [projects, setProjects] = useState(null); // null = loading
+  const [allProjects, setProjects] = useState(null); // null = loading; includes projects in the trash
   const [route, setRoute] = useState(parseHash);
   const [filter, setFilter] = useState({ status: "all", domain: null });
   const [backendError, setBackendError] = useState("");
@@ -159,6 +162,8 @@ function Workspace({ user, isDemo, onLogout }) {
     go("#/");
   };
 
+  const projects = allProjects && allProjects.filter((p) => !p.deleted_at);
+  const trash = allProjects && allProjects.filter((p) => p.deleted_at);
   const name = isDemo ? "Demo account" : user?.user_metadata?.name || user?.email;
 
   return (
@@ -189,13 +194,15 @@ function Workspace({ user, isDemo, onLogout }) {
           )}
           {user && (
             <div className="user">
-              <span className="avatar" aria-hidden="true">
-                {isDemo ? "D" : initials(name)}
-              </span>
-              <span className="user-text">
-                <span className="user-name">{name}</span>
-                <span className="user-email">{user.email}</span>
-              </span>
+              <a className="user-link" href="#/account" title="Account settings">
+                <span className="avatar" aria-hidden="true">
+                  {isDemo ? "D" : initials(name)}
+                </span>
+                <span className="user-text">
+                  <span className="user-name">{name}</span>
+                  <span className="user-email">{user.email}</span>
+                </span>
+              </a>
               <button className="btn btn-icon" onClick={onLogout} aria-label="Log out" title="Log out">
                 <Icon name="logout" size={16} />
               </button>
@@ -207,6 +214,7 @@ function Workspace({ user, isDemo, onLogout }) {
       <div className="layout">
         <Sidebar
           projects={projects}
+          trashCount={trash?.length || 0}
           filter={filter}
           view={route.view}
           onNew={() => go("#/new")}
@@ -221,6 +229,10 @@ function Workspace({ user, isDemo, onLogout }) {
               <ProjectView key={route.id} id={route.id} onChanged={refreshList} onDeleted={onDeleted} />
             ) : route.view === "new" ? (
               <NewProjectForm onCreated={onCreated} projectCount={projects?.length || 0} />
+            ) : route.view === "trash" ? (
+              <TrashPage trash={trash} onChanged={refreshList} />
+            ) : route.view === "account" ? (
+              <AccountPage supabase={supabase} user={user} isDemo={isDemo} projects={projects} trash={trash} health={health} onLogout={onLogout} />
             ) : (
               <ProjectsPage
                 projects={projects}

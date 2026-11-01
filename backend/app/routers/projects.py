@@ -1,5 +1,6 @@
 import base64
 import binascii
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -20,9 +21,15 @@ def _get_or_404(store, pid: str) -> dict:
     return project
 
 
+TRASH_DAYS = 30
+
+
 @router.get("")
 def list_projects(user: User = Depends(current_user)):
-    return get_store(user).list_projects()
+    """All projects, including those in the trash (`deleted_at` set). Trash older than 30 days is purged first."""
+    store = get_store(user)
+    store.purge_trash((datetime.now(timezone.utc) - timedelta(days=TRASH_DAYS)).isoformat())
+    return store.list_projects()
 
 
 @router.post("", status_code=201)
@@ -42,9 +49,27 @@ def get_project(pid: str, user: User = Depends(current_user)):
 
 
 @router.delete("/{pid}", status_code=204)
-def delete_project(pid: str, user: User = Depends(current_user)):
-    if not get_store(user).delete_project(pid):
+def trash_project(pid: str, user: User = Depends(current_user)):
+    """Move a project to the trash; it can be restored for 30 days."""
+    if not get_store(user).set_trashed(pid, datetime.now(timezone.utc).isoformat()):
         raise HTTPException(404, "Project not found")
+
+
+@router.post("/{pid}/restore")
+def restore_project(pid: str, user: User = Depends(current_user)):
+    store = get_store(user)
+    if not store.set_trashed(pid, None):
+        raise HTTPException(404, "Project not found")
+    return _get_or_404(store, pid)
+
+
+@router.delete("/{pid}/permanent", status_code=204)
+def delete_forever(pid: str, user: User = Depends(current_user)):
+    """Permanently delete a project. Only projects already in the trash can be deleted this way."""
+    store = get_store(user)
+    if not _get_or_404(store, pid).get("deleted_at"):
+        raise HTTPException(409, "Move the project to the trash first")
+    store.delete_project(pid)
 
 
 @router.post("/{pid}/analyze")

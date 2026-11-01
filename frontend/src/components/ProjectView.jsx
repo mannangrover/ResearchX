@@ -195,7 +195,7 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
   };
 
   const remove = async () => {
-    if (!confirm(`Delete “${project.title}”? This cannot be undone.`)) return;
+    if (!confirm(`Move “${project.title}” to the trash? You can restore it from the trash for 30 days.`)) return;
     await api.deleteProject(id);
     onDeleted();
   };
@@ -315,7 +315,7 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
         <div className="project-head-actions">
           <VersionSwitcher project={project} viewing={viewing} onOpen={openVersion} />
           <button className="btn btn-ghost btn-danger" onClick={remove} disabled={!!running}>
-            <Icon name="trash" size={15} /> Delete
+            <Icon name="trash" size={15} /> Move to Trash
           </button>
         </div>
       </header>

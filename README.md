@@ -124,7 +124,9 @@ cd backend && python -m scripts.smoke_test https://github.com/qodo-ai/pr-agent
 | `POST` | `/api/projects/{id}/analyze` | 2 — technical profile |
 | `POST` | `/api/projects/{id}/literature` | 3 — related papers (optional `{"queries": [...]}`) |
 | `POST` | `/api/projects/{id}/score` | 4 + 5 — ROS, gaps, modifications, research questions |
-| `DELETE` | `/api/projects/{id}` | delete |
+| `DELETE` | `/api/projects/{id}` | move to the trash (restorable for 30 days) |
+| `POST` | `/api/projects/{id}/restore` | restore from the trash |
+| `DELETE` | `/api/projects/{id}/permanent` | delete a trashed project forever |
 | `POST` | `/api/projects/{id}/refine/start` | 6 — advisor's opening message |
 | `POST` | `/api/projects/{id}/refine/message` | 6 — send a message (`{"content": "..."}`) |
 | `POST` | `/api/projects/{id}/refine/propose` | 6 — draft the refined proposal from the discussion |
