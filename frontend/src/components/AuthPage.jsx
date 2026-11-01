@@ -2,14 +2,75 @@ import { useState } from "react";
 import Icon, { Logo } from "./Icon";
 import { Alert } from "./common";
 import ThemeToggle from "./ThemeToggle";
-import { STAGES } from "../stages";
 
-const FEATURES = [
-  ["book", "Literature from three sources", "OpenAlex, Semantic Scholar and arXiv, ranked by semantic similarity."],
-  ["gauge", "Transparent opportunity score", "Six measurable dimensions, cross-checked by an independent LLM judge."],
-  ["target", "Gaps, questions & refinement", "Concrete research gaps and an advisor chat that turns them into a proposal."],
-  ["flask", "Experiment plan & paper evaluation", "A plan that fits your time, then a check of the paper you write and where to aim it."],
+// Real result of the "Thermal-Aware" project in the demo workspace
+const EXAMPLE = {
+  title: "Thermal-aware quantization for classroom face recognition",
+  score: 52.9,
+  band: "Moderate",
+  dimensions: [
+    ["Literature overlap", 4.7],
+    ["Technical depth", 7.3],
+    ["Feasibility", 5.5],
+    ["Potential impact", 5.4],
+    ["Reproducibility", 3.0],
+    ["Contribution", 5.4],
+  ],
+};
+
+const JOURNEY = [
+  ["cpu", "Understand"],
+  ["gauge", "Assess"],
+  ["flask", "Design"],
+  ["rocket", "Publish"],
 ];
+
+function ResultPreview() {
+  const radius = 40;
+  const circumference = 2 * Math.PI * radius;
+  return (
+    <figure
+      className="auth-preview"
+      role="img"
+      aria-label={`Example result: research opportunity score ${EXAMPLE.score} out of 100, ${EXAMPLE.band}, with a breakdown across six dimensions.`}
+    >
+      <figcaption>
+        <span>Example result</span>
+        <strong>{EXAMPLE.title}</strong>
+      </figcaption>
+      <div className="auth-preview-body">
+        <div className="auth-ring">
+          <svg viewBox="0 0 100 100" width="104" height="104" aria-hidden="true">
+            <circle cx="50" cy="50" r={radius} className="auth-ring-track" />
+            <circle
+              cx="50"
+              cy="50"
+              r={radius}
+              className="auth-ring-value"
+              strokeDasharray={`${(EXAMPLE.score / 100) * circumference} ${circumference}`}
+              transform="rotate(-90 50 50)"
+            />
+          </svg>
+          <span className="auth-ring-label">
+            <b>{EXAMPLE.score}</b>
+            {EXAMPLE.band}
+          </span>
+        </div>
+        <ul className="auth-bars">
+          {EXAMPLE.dimensions.map(([name, value]) => (
+            <li key={name}>
+              <span>{name}</span>
+              <i>
+                <i style={{ width: `${value * 10}%` }} />
+              </i>
+              <b>{value.toFixed(1)}</b>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </figure>
+  );
+}
 
 export default function AuthPage({ supabase, demo, initialMode = "login", initialInfo = "" }) {
   const [mode, setMode] = useState(initialMode); // login | signup
@@ -84,26 +145,17 @@ export default function AuthPage({ supabase, demo, initialMode = "login", initia
             ResearchX analyses your idea or GitHub repository, finds the closest published work, and tells you — with
             evidence — where the research opportunity is.
           </p>
-          <ul className="auth-features">
-            {FEATURES.map(([icon, title, text]) => (
-              <li key={title}>
-                <span className="auth-feature-icon">
-                  <Icon name={icon} size={16} />
-                </span>
-                <span>
-                  <strong>{title}</strong>
-                  <span>{text}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
         </div>
 
-        <ol className="auth-pipeline" aria-label="Live workflow stages">
-          {STAGES.filter((s) => s.built).map((s) => (
-            <li key={s.n}>
-              <span>{s.n}</span>
-              {s.short}
+        <ResultPreview />
+
+        <ol className="auth-journey" aria-label="The four steps of the workflow">
+          {JOURNEY.map(([icon, label]) => (
+            <li key={label}>
+              <span>
+                <Icon name={icon} size={16} />
+              </span>
+              {label}
             </li>
           ))}
         </ol>
