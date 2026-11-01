@@ -292,6 +292,11 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
 
   return (
     <div className="project-view">
+      <nav className="breadcrumb" aria-label="Breadcrumb">
+        <a href="#/">All projects</a>
+        <Icon name="chevronRight" size={13} />
+        <span aria-current="page">{shown.title}</span>
+      </nav>
       <header className="page-head project-head">
         <div className="project-head-main">
           <span className="eyebrow">

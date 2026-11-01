@@ -77,12 +77,24 @@ def create_project(title: str, idea_text: str, github_url: str, domain: str) -> 
 
 
 def list_projects() -> list[dict]:
+    """Project rows for the projects table, with a few summary fields from the stage results."""
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT id, title, github_url, domain, stage, created_at, updated_at"
+            "SELECT id, title, github_url, domain, stage, created_at, updated_at, score, paper, guidance, history"
             " FROM projects ORDER BY updated_at DESC"
         ).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = _row_to_dict(r)
+        history = d.pop("history")
+        out.append({
+            **{k: d[k] for k in ("id", "title", "github_url", "domain", "stage", "created_at", "updated_at")},
+            "ros": (d["score"] or {}).get("total"),
+            "paper_score": ((d["paper"] or {}).get("score") or {}).get("total"),
+            "tier": ((d["guidance"] or {}).get("tier") or {}).get("name"),
+            "version": history.get("current") if isinstance(history, dict) else None,
+        })
+    return out
 
 
 def get_project(pid: str) -> dict | None:

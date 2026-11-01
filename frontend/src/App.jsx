@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { api, configureAuth } from "./api";
 import Sidebar from "./components/Sidebar";
+import ProjectsPage from "./components/ProjectsPage";
 import NewProjectForm from "./components/NewProjectForm";
 import ProjectView from "./components/ProjectView";
 import AuthPage from "./components/AuthPage";
 import Icon, { Logo } from "./components/Icon";
-import { Alert } from "./components/common";
 import ThemeToggle from "./components/ThemeToggle";
 
 function Splash({ children }) {
@@ -107,10 +107,23 @@ function initials(text) {
   return (parts[0]?.[0] || "?").toUpperCase() + (parts[1]?.[0] || "").toUpperCase();
 }
 
+// Pages live in the URL hash so the browser's Back button works: #/  #/new  #/project/<id>
+function parseHash() {
+  const h = window.location.hash.replace(/^#\/?/, "");
+  if (h.startsWith("project/")) return { view: "project", id: h.slice("project/".length) };
+  if (h === "new") return { view: "new" };
+  return { view: "list" };
+}
+
+const go = (hash) => {
+  if (window.location.hash !== hash) window.location.hash = hash;
+};
+
 function Workspace({ user, isDemo, onLogout }) {
   const [health, setHealth] = useState(null);
   const [projects, setProjects] = useState(null); // null = loading
-  const [selectedId, setSelectedId] = useState(null);
+  const [route, setRoute] = useState(parseHash);
+  const [filter, setFilter] = useState({ status: "all", domain: null });
   const [backendError, setBackendError] = useState("");
 
   const refreshList = () =>
@@ -128,16 +141,22 @@ function Workspace({ user, isDemo, onLogout }) {
   useEffect(() => {
     api.health().then(setHealth).catch(() => {});
     refreshList();
+    const onHash = () => {
+      setRoute(parseHash());
+      window.scrollTo({ top: 0 });
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
   const onCreated = (project) => {
     refreshList();
-    setSelectedId(project.id);
+    go(`#/project/${project.id}`);
   };
 
   const onDeleted = () => {
-    setSelectedId(null);
     refreshList();
+    go("#/");
   };
 
   const name = isDemo ? "Demo account" : user?.user_metadata?.name || user?.email;
@@ -148,7 +167,7 @@ function Workspace({ user, isDemo, onLogout }) {
         Skip to content
       </a>
       <header className="topbar">
-        <button className="brand" onClick={() => setSelectedId(null)} aria-label="ResearchX home">
+        <button className="brand" onClick={() => go("#/")} aria-label="ResearchX — all projects">
           <Logo size={30} />
           <span className="brand-name" translate="no">
             ResearchX
@@ -188,22 +207,29 @@ function Workspace({ user, isDemo, onLogout }) {
       <div className="layout">
         <Sidebar
           projects={projects}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onNew={() => setSelectedId(null)}
+          filter={filter}
+          view={route.view}
+          onNew={() => go("#/new")}
+          onFilter={(f) => {
+            setFilter(f);
+            go("#/");
+          }}
         />
         <main className="main" id="main" tabIndex={-1}>
           <div className="main-inner">
-            {backendError && <Alert kind="error">{backendError}</Alert>}
-            {selectedId ? (
-              <ProjectView
-                key={selectedId}
-                id={selectedId}
-                onChanged={refreshList}
-                onDeleted={onDeleted}
-              />
-            ) : (
+            {route.view === "project" ? (
+              <ProjectView key={route.id} id={route.id} onChanged={refreshList} onDeleted={onDeleted} />
+            ) : route.view === "new" ? (
               <NewProjectForm onCreated={onCreated} projectCount={projects?.length || 0} />
+            ) : (
+              <ProjectsPage
+                projects={projects}
+                filter={filter}
+                error={backendError}
+                onOpen={(pid) => go(`#/project/${pid}`)}
+                onNew={() => go("#/new")}
+                onDeleted={refreshList}
+              />
             )}
           </div>
         </main>

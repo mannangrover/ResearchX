@@ -54,6 +54,11 @@ export default function NewProjectForm({ onCreated, projectCount }) {
 
   return (
     <div className="new-project">
+      <nav className="breadcrumb" aria-label="Breadcrumb">
+        <a href="#/">All projects</a>
+        <Icon name="chevronRight" size={13} />
+        <span aria-current="page">New project</span>
+      </nav>
       <header className="page-head">
         <span className="eyebrow">Stage 1 · Idea / project input</span>
         <h1>Start a new research project</h1>
@@ -67,7 +72,7 @@ export default function NewProjectForm({ onCreated, projectCount }) {
         <div className="section-head">
           <h2 id="examples-title">Start from an example</h2>
           <span className="muted small">
-            {projectCount > 0 ? "Each one is also pre-computed in the sidebar" : "Click to fill the form"}
+            {projectCount > 0 ? "Each one is also pre-computed in your projects list" : "Click to fill the form"}
           </span>
         </div>
         <div className="example-grid">
