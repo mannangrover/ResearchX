@@ -12,7 +12,7 @@ export function StageCard({ stage, title, description, done, method, note, child
         <div className="stage-heading">
           <span className="eyebrow">
             Stage {stage}
-            {done && <span className="eyebrow-done"> · Complete</span>}
+            {done && <span className="eyebrow-done">, complete</span>}
           </span>
           <h2 id={`stage-${stage}-title`}>{title}</h2>
           {description && <p className="stage-desc">{description}</p>}

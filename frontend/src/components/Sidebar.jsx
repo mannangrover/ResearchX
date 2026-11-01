@@ -39,7 +39,7 @@ export default function Sidebar({ projects, trashCount, filter, onFilter, onNew,
 
         {domains.length > 0 && (
           <>
-            <h2 className="sidebar-title">Domains</h2>
+            <p className="sidebar-title">Domains</p>
             <ul className="side-nav">
               {domains.map(([d, n]) => {
                 const active = onList && filter.domain === d;
@@ -77,6 +77,7 @@ export default function Sidebar({ projects, trashCount, filter, onFilter, onNew,
       <div className="sidebar-foot">
         <span className="status-dot ok" aria-hidden="true" />
         {BUILT_STAGES} of {STAGES.length} stages live
+        <a href="#/home" className="sidebar-home">About ResearchX</a>
       </div>
     </aside>
   );

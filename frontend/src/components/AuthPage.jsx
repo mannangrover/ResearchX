@@ -2,17 +2,10 @@ import { useState } from "react";
 import Icon, { Logo } from "./Icon";
 import { Alert } from "./common";
 import ThemeToggle from "./ThemeToggle";
+import LiteratureMap from "./landing/LiteratureMap";
 
-const FEATURES = [
-  ["book", "Literature from three sources", "OpenAlex, Semantic Scholar and arXiv, ranked by semantic similarity."],
-  ["gauge", "Transparent opportunity score", "Six measurable dimensions, cross-checked by an independent LLM judge."],
-  ["target", "Gaps, questions & refinement", "Concrete research gaps and an advisor chat that turns them into a proposal."],
-];
-
-const PIPELINE = ["Input", "Analysis", "Literature", "Score", "Gaps", "Refine", "Plan", "Paper", "Publish"];
-
-export default function AuthPage({ supabase, demo }) {
-  const [mode, setMode] = useState("login"); // login | signup
+export default function AuthPage({ supabase, demo, initialMode = "login" }) {
+  const [mode, setMode] = useState(initialMode); // login | signup
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState("");
@@ -22,6 +15,7 @@ export default function AuthPage({ supabase, demo }) {
 
   const switchMode = (m) => {
     setMode(m);
+    window.history.replaceState(null, "", `#/${m}`);
     setError("");
     setInfo("");
   };
@@ -71,50 +65,23 @@ export default function AuthPage({ supabase, demo }) {
   return (
     <div className="auth">
       <aside className="auth-aside">
-        <div className="auth-brand">
-          <Logo size={34} />
+        <a className="auth-brand" href="#/" aria-label="ResearchX home">
+          <Logo size={30} />
           <span translate="no">ResearchX</span>
-        </div>
-
+        </a>
         <div className="auth-pitch">
-          <span className="eyebrow on-dark">AI-powered research workflow</span>
-          <h1>From a project idea to a research direction you can defend.</h1>
-          <p>
-            ResearchX analyses your idea or GitHub repository, finds the closest published work, and tells you — with
-            evidence — where the research opportunity is.
-          </p>
-          <ul className="auth-features">
-            {FEATURES.map(([icon, title, text]) => (
-              <li key={title}>
-                <span className="auth-feature-icon">
-                  <Icon name={icon} size={16} />
-                </span>
-                <span>
-                  <strong>{title}</strong>
-                  <span>{text}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+          <h1>Know where your research idea stands before you build it.</h1>
+          <LiteratureMap />
         </div>
-
-        <ol className="auth-pipeline" aria-label="Live workflow stages">
-          {PIPELINE.map((s, i) => (
-            <li key={s}>
-              <span>{i + 1}</span>
-              {s}
-            </li>
-          ))}
-        </ol>
       </aside>
 
       <main className="auth-main">
         <ThemeToggle className="auth-theme" />
         <div className="auth-panel">
-          <div className="auth-brand auth-brand-mobile">
+          <a className="auth-brand auth-brand-mobile" href="#/" aria-label="ResearchX home">
             <Logo size={30} />
             <span translate="no">ResearchX</span>
-          </div>
+          </a>
           <h2>{mode === "login" ? "Welcome back" : "Create your account"}</h2>
           <p className="muted">
             {mode === "login" ? "Log in to continue to your research projects." : "Projects are saved to your own private workspace."}

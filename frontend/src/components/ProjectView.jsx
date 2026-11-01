@@ -60,7 +60,7 @@ function moduleSummary(project, module) {
         label: "Opportunity score",
         value: score.total.toFixed(1),
         unit: "/ 100",
-        sub: delta == null ? `${score.band} opportunity` : `${score.band} · ${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(1)} vs v${parent.version}`,
+        sub: delta == null ? `${score.band} opportunity` : `${score.band}, ${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(1)} vs v${parent.version}`,
         cls: BAND_CLASS[score.band],
       });
       if (score.llm_score) {
@@ -127,7 +127,7 @@ function Prerequisite({ stage, needs, onGo }) {
       <div className="empty-state">
         <Icon name="info" size={18} />
         <p>
-          Complete <strong>stage {needs} · {n.name}</strong> first. This stage builds on its results.
+          Complete <strong>stage {needs}, {n.name}</strong> first. This stage builds on its results.
         </p>
         <button className="btn btn-secondary" onClick={() => onGo(needs)}>
           Go to {n.short} <Icon name="arrowRight" size={14} />
@@ -301,7 +301,7 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
         <div className="project-head-main">
           <span className="eyebrow">
             {project.domain || "Domain not set"}
-            {project.created_at && ` · created ${timeAgo(project.created_at)}`}
+            {project.created_at && `, created ${timeAgo(project.created_at)}`}
           </span>
           <h1>{shown.title}</h1>
           {project.github_url && (

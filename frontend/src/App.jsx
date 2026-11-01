@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { api, configureAuth } from "./api";
 import Sidebar from "./components/Sidebar";
 import ProjectsPage from "./components/ProjectsPage";
-import TrashPage from "./components/TrashPage";
-import AccountPage from "./components/AccountPage";
-import NewProjectForm from "./components/NewProjectForm";
-import ProjectView from "./components/ProjectView";
+
+// Heavier pages load only when they are opened, so the first page stays light
+const TrashPage = lazy(() => import("./components/TrashPage"));
+const AccountPage = lazy(() => import("./components/AccountPage"));
+const NewProjectForm = lazy(() => import("./components/NewProjectForm"));
+const ProjectView = lazy(() => import("./components/ProjectView"));
 import AuthPage from "./components/AuthPage";
+import LandingPage from "./components/landing/LandingPage";
 import Icon, { Logo } from "./components/Icon";
 import ThemeToggle from "./components/ThemeToggle";
 
@@ -91,7 +94,7 @@ export default function App() {
       </Splash>
     );
   }
-  if (supabase && !session) return <AuthPage supabase={supabase} demo={authConfig.demo} />;
+  if (supabase && !session) return <SignedOut supabase={supabase} demo={authConfig.demo} />;
 
   const user = session?.user;
   return (
@@ -105,6 +108,41 @@ export default function App() {
   );
 }
 
+// Visitors see the landing page; #/login and #/signup open the auth page
+function SignedOut({ supabase, demo }) {
+  const read = () => window.location.hash.replace(/^#\/?/, "");
+  const [page, setPage] = useState(read);
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [demoError, setDemoError] = useState("");
+
+  useEffect(() => {
+    const onHash = () => setPage(read());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  const tryDemo = async () => {
+    setDemoBusy(true);
+    setDemoError("");
+    const { error } = await supabase.auth.signInWithPassword(demo);
+    setDemoBusy(false);
+    if (error) setDemoError(`The demo could not be opened (${error.message}). Try again, or create a free account.`);
+  };
+
+  if (page === "login" || page === "signup") {
+    return <AuthPage key={page} supabase={supabase} demo={demo} initialMode={page} />;
+  }
+  return (
+    <LandingPage
+      onLogin={() => (window.location.hash = "#/login")}
+      onSignup={() => (window.location.hash = "#/signup")}
+      onDemo={demo ? tryDemo : null}
+      demoBusy={demoBusy}
+      demoError={demoError}
+    />
+  );
+}
+
 function initials(text) {
   const parts = (text || "?").replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
   return (parts[0]?.[0] || "?").toUpperCase() + (parts[1]?.[0] || "").toUpperCase();
@@ -114,7 +152,7 @@ function initials(text) {
 function parseHash() {
   const h = window.location.hash.replace(/^#\/?/, "");
   if (h.startsWith("project/")) return { view: "project", id: h.slice("project/".length) };
-  if (["new", "trash", "account"].includes(h)) return { view: h };
+  if (["new", "trash", "account", "home"].includes(h)) return { view: h };
   return { view: "list" };
 }
 
@@ -165,6 +203,10 @@ function Workspace({ supabase, user, isDemo, onLogout }) {
   const projects = allProjects && allProjects.filter((p) => !p.deleted_at);
   const trash = allProjects && allProjects.filter((p) => p.deleted_at);
   const name = isDemo ? "Demo account" : user?.user_metadata?.name || user?.email;
+
+  if (route.view === "home") {
+    return <LandingPage signedIn onLogin={() => go("#/")} onSignup={() => go("#/new")} />;
+  }
 
   return (
     <div className="app">
@@ -225,6 +267,7 @@ function Workspace({ supabase, user, isDemo, onLogout }) {
         />
         <main className="main" id="main" tabIndex={-1}>
           <div className="main-inner">
+            <Suspense fallback={<div className="skeleton-page" aria-busy="true" aria-label="Loading"><span className="skeleton h-title" /><span className="skeleton h-card" /></div>}>
             {route.view === "project" ? (
               <ProjectView key={route.id} id={route.id} onChanged={refreshList} onDeleted={onDeleted} />
             ) : route.view === "new" ? (
@@ -243,6 +286,7 @@ function Workspace({ supabase, user, isDemo, onLogout }) {
                 onDeleted={refreshList}
               />
             )}
+            </Suspense>
           </div>
         </main>
       </div>

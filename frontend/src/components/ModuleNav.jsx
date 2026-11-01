@@ -73,7 +73,7 @@ export default function ModuleNav({ completed, selected, onSelect, runningStage 
                   <b>M{m.n}</b> {m.name}
                 </span>
                 <span className="module-meta">
-                  Stages {m.stages[0]}–{m.stages.at(-1)} · {finished} of {built.length} done
+                  Stages {m.stages[0]}–{m.stages.at(-1)}, {finished} of {built.length} done
                 </span>
               </span>
             </button>

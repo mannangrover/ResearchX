@@ -60,7 +60,7 @@ export default function NewProjectForm({ onCreated, projectCount }) {
         <span aria-current="page">New project</span>
       </nav>
       <header className="page-head">
-        <span className="eyebrow">Stage 1 · Idea / project input</span>
+        <span className="eyebrow">Stage 1, idea or project input</span>
         <h1>Start a new research project</h1>
         <p className="lede">
           Describe an idea, link a GitHub repository, or both. ResearchX profiles it, finds the closest published work and

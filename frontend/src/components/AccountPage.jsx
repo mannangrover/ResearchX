@@ -126,7 +126,7 @@ export default function AccountPage({ supabase, user, isDemo, projects, trash, h
             <dd>{completed}</dd>
             <dt>In the trash</dt>
             <dd>
-              {(trash || []).length} · <a href="#/trash">open trash</a>
+              {(trash || []).length} (<a href="#/trash">open the trash</a>)
             </dd>
             <dt>Storage</dt>
             <dd>{health ? (health.storage === "supabase" ? "Supabase (cloud, private to you)" : "Local SQLite file") : "—"}</dd>

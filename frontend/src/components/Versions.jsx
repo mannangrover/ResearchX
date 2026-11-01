@@ -65,9 +65,9 @@ export function VersionSwitcher({ project, viewing, onOpen }) {
       <select value={viewing ?? current} onChange={(e) => onOpen(Number(e.target.value))}>
         {[...list].reverse().map((v) => (
           <option key={v.version} value={v.version}>
-            v{v.version} · {v.label || "Version"}
-            {totalOf(v) != null ? ` · ${fmt(totalOf(v))}` : ""}
-            {v.legacy ? " · summary only" : ""}
+            v{v.version} {(v.label || "version").toLowerCase()}
+            {totalOf(v) != null ? `, ROS ${fmt(totalOf(v))}` : ""}
+            {v.legacy ? ", summary only" : ""}
           </option>
         ))}
       </select>
@@ -97,12 +97,12 @@ export function VersionHistory({ project, viewing, onOpen, busy }) {
                 {v.parent ? ` from v${v.parent}` : ""}
                 {totalOf(v) != null && (
                   <>
-                    {" · ROS "}
+                    {", ROS "}
                     <span className={BAND_CLASS[v.score.band]}>{fmt(totalOf(v))}</span>
                   </>
                 )}
-                {v.version === shown ? " · open now" : ""}
-                {v.legacy ? " · summary only" : ""}
+                {v.version === shown ? ", open now" : ""}
+                {v.legacy ? ", summary only" : ""}
               </span>
             </div>
             {v.version !== shown && (
@@ -124,7 +124,7 @@ export function VersionBanner({ version, onBack }) {
       <Icon name="layers" size={16} />
       <div>
         <strong>
-          v{version.version} · {version.label}
+          v{version.version} ({version.label.toLowerCase()})
         </strong>{" "}
         was saved before full version snapshots existed, so only its summary can be shown.
       </div>
@@ -141,7 +141,7 @@ export function VersionBanner({ version, onBack }) {
 export function LegacySummary({ version }) {
   return (
     <section className="card vc-card">
-      <span className="eyebrow">v{version.version} · summary only</span>
+      <span className="eyebrow">v{version.version}, summary only</span>
       <h2 className="vc-title">{version.title}</h2>
       <p className="small muted">This version was saved before full version snapshots existed, so only its score summary is available.</p>
       {version.idea_text && <p className="idea-text">{version.idea_text}</p>}
