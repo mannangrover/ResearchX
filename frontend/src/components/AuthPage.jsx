@@ -2,19 +2,21 @@ import { useState } from "react";
 import Icon, { Logo } from "./Icon";
 import { Alert } from "./common";
 import ThemeToggle from "./ThemeToggle";
+import PasswordRules from "./PasswordRules";
+import { emailError, nameError, passwordError } from "../validation";
 
 // Real result of the "Thermal-Aware" project in the demo workspace
 const EXAMPLE = {
   title: "Thermal-aware quantization for classroom face recognition",
-  score: 52.9,
-  band: "Moderate",
+  score: 45.0,
+  band: "Limited",
   dimensions: [
     ["Literature overlap", 4.7],
-    ["Technical depth", 7.3],
-    ["Feasibility", 5.5],
+    ["Technical depth", 6.3],
+    ["Feasibility", 3.5],
     ["Potential impact", 5.4],
-    ["Reproducibility", 3.0],
-    ["Contribution", 5.4],
+    ["Reproducibility", 0.0],
+    ["Contribution", 5.2],
   ],
 };
 
@@ -103,17 +105,27 @@ export default function AuthPage({ supabase, demo, initialMode = "login", initia
 
   const submit = (e) => {
     e.preventDefault();
+    const email = form.email.trim();
+    const invalid =
+      mode === "login"
+        ? emailError(email) || (form.password ? "" : "Enter your password.")
+        : nameError(form.name) || emailError(email) || passwordError(form.password);
+    if (invalid) {
+      setInfo("");
+      setError(invalid);
+      return;
+    }
     if (mode === "login") {
       run("form", async () => {
-        const { error } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
+        const { error } = await supabase.auth.signInWithPassword({ email, password: form.password });
         if (error) throw error;
       });
     } else {
       run("form", async () => {
         const { data, error } = await supabase.auth.signUp({
-          email: form.email,
+          email,
           password: form.password,
-          options: { data: { name: form.name } },
+          options: { data: { name: form.name.trim() } },
         });
         if (error) throw error;
         if (!data.session) {
@@ -182,11 +194,11 @@ export default function AuthPage({ supabase, demo, initialMode = "login", initia
             </button>
           </div>
 
-          <form className="form" onSubmit={submit}>
+          <form className="form" onSubmit={submit} noValidate>
             {mode === "signup" && (
               <div className="field">
                 <label htmlFor="auth-name">Name</label>
-                <input id="auth-name" name="name" value={form.name} onChange={set("name")} placeholder="Your name…" autoComplete="name" />
+                <input id="auth-name" name="name" required value={form.name} onChange={set("name")} placeholder="Your name…" autoComplete="name" />
               </div>
             )}
             <div className="field">
@@ -210,12 +222,12 @@ export default function AuthPage({ supabase, demo, initialMode = "login", initia
                 name="password"
                 type="password"
                 required
-                minLength={6}
                 value={form.password}
                 onChange={set("password")}
-                placeholder={mode === "signup" ? "At least 6 characters…" : "Your password…"}
+                placeholder={mode === "signup" ? "Create a strong password…" : "Your password…"}
                 autoComplete={mode === "signup" ? "new-password" : "current-password"}
               />
+              {mode === "signup" && <PasswordRules password={form.password} />}
             </div>
 
             <div aria-live="polite">

@@ -2,7 +2,9 @@ import { useState } from "react";
 import Icon from "./Icon";
 import { Alert } from "./common";
 import ThemeToggle from "./ThemeToggle";
+import PasswordRules from "./PasswordRules";
 import { listStage } from "../stages";
+import { nameError, passwordError } from "../validation";
 
 const dateFmt = new Intl.DateTimeFormat("en", { day: "numeric", month: "long", year: "numeric" });
 
@@ -45,12 +47,15 @@ export default function AccountPage({ supabase, user, isDemo, projects, papers, 
 
   const saveName = (e) => {
     e.preventDefault();
+    const invalid = nameError(name);
+    if (invalid) return setMsg({ name: { kind: "error", text: invalid } });
     run("name", () => supabase.auth.updateUser({ data: { name: name.trim() } }), "Name updated.");
   };
 
   const savePassword = (e) => {
     e.preventDefault();
-    if (pw.next !== pw.confirm) return setMsg({ password: { kind: "error", text: "The two passwords do not match." } });
+    const invalid = passwordError(pw.next) || (pw.next !== pw.confirm ? "The two passwords do not match." : "");
+    if (invalid) return setMsg({ password: { kind: "error", text: invalid } });
     run("password", () => supabase.auth.updateUser({ password: pw.next }), "Password changed.");
     setPw({ next: "", confirm: "" });
   };
@@ -97,15 +102,16 @@ export default function AccountPage({ supabase, user, isDemo, projects, papers, 
           </form>
         </Section>
 
-        <Section icon="lock" title="Password" description="At least 6 characters.">
+        <Section icon="lock" title="Password">
           <form className="form" onSubmit={savePassword}>
             <div className="field">
               <label htmlFor="acc-pw">New password</label>
-              <input id="acc-pw" type="password" autoComplete="new-password" minLength={6} required value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} disabled={locked} />
+              <input id="acc-pw" type="password" autoComplete="new-password" required value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} disabled={locked} />
+              {!locked && <PasswordRules password={pw.next} />}
             </div>
             <div className="field">
               <label htmlFor="acc-pw2">Confirm new password</label>
-              <input id="acc-pw2" type="password" autoComplete="new-password" minLength={6} required value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} disabled={locked} />
+              <input id="acc-pw2" type="password" autoComplete="new-password" required value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} disabled={locked} />
             </div>
             {msg.password && <Alert kind={msg.password.kind}>{msg.password.text}</Alert>}
             {!locked && (

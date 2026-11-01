@@ -96,7 +96,9 @@ their own projects. Without them, the app runs in local mode: no login, SQLite f
 
 1. Run [docs/supabase_schema.sql](docs/supabase_schema.sql) in the Supabase SQL Editor (creates the
    `projects` table and its security policies).
-2. In Authentication → Sign In / Providers, turn off **Confirm email** so sign-ups work instantly.
+2. In Authentication → Sign In / Providers, turn off **Confirm email** so sign-ups work instantly. Under
+   the email provider's password settings, require at least 8 characters with lowercase, uppercase, digits
+   and symbols, to match the rules on the sign-up form.
 3. Demo account: put `SUPABASE_SECRET_KEY` in `.env`, then run `python -m scripts.create_demo_user`.
 
 ## Run

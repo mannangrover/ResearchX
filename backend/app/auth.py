@@ -5,6 +5,7 @@ The browser logs in with Supabase and sends the access token as
 passes the same token on to the database, so Row-Level Security applies.
 Without Supabase configured, every request runs as a single local user.
 """
+import re
 import time
 from dataclasses import dataclass
 
@@ -27,6 +28,11 @@ class User:
 LOCAL_USER = User(id="local", email="local")
 
 
+def valid_email(email: str) -> bool:
+    """Same rule as the sign-up form, so an account made around the form cannot use the app."""
+    return bool(re.fullmatch(r"[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[^\W\d_]{2,}", email))
+
+
 def _verify(token: str) -> User:
     cached = _token_cache.get(token)
     if cached and cached[0] > time.time():
@@ -42,6 +48,8 @@ def _verify(token: str) -> User:
     if r.status_code != 200:
         raise HTTPException(401, "Session expired or invalid — please log in again")
     data = r.json()
+    if not valid_email(data.get("email") or ""):
+        raise HTTPException(401, "This account does not have a valid email address. Sign up with a real one.")
     user = User(id=data["id"], email=data.get("email") or "", token=token)
     _token_cache[token] = (time.time() + TOKEN_CACHE_SECONDS, user)
     return user
