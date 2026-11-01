@@ -2,6 +2,14 @@ import { useState } from "react";
 import Icon, { Logo } from "./Icon";
 import { Alert } from "./common";
 import ThemeToggle from "./ThemeToggle";
+import { STAGES } from "../stages";
+
+const FEATURES = [
+  ["book", "Literature from three sources", "OpenAlex, Semantic Scholar and arXiv, ranked by semantic similarity."],
+  ["gauge", "Transparent opportunity score", "Six measurable dimensions, cross-checked by an independent LLM judge."],
+  ["target", "Gaps, questions & refinement", "Concrete research gaps and an advisor chat that turns them into a proposal."],
+  ["flask", "Experiment plan & paper evaluation", "A plan that fits your time, then a check of the paper you write and where to aim it."],
+];
 
 export default function AuthPage({ supabase, demo, initialMode = "login", initialInfo = "" }) {
   const [mode, setMode] = useState(initialMode); // login | signup
@@ -63,14 +71,52 @@ export default function AuthPage({ supabase, demo, initialMode = "login", initia
 
   return (
     <div className="auth">
+      <aside className="auth-aside">
+        <div className="auth-brand">
+          <Logo size={34} />
+          <span translate="no">ResearchX</span>
+        </div>
+
+        <div className="auth-pitch">
+          <span className="eyebrow on-dark">AI-powered research workflow</span>
+          <h1>From a project idea to a research direction you can defend.</h1>
+          <p>
+            ResearchX analyses your idea or GitHub repository, finds the closest published work, and tells you — with
+            evidence — where the research opportunity is.
+          </p>
+          <ul className="auth-features">
+            {FEATURES.map(([icon, title, text]) => (
+              <li key={title}>
+                <span className="auth-feature-icon">
+                  <Icon name={icon} size={16} />
+                </span>
+                <span>
+                  <strong>{title}</strong>
+                  <span>{text}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <ol className="auth-pipeline" aria-label="Live workflow stages">
+          {STAGES.filter((s) => s.built).map((s) => (
+            <li key={s.n}>
+              <span>{s.n}</span>
+              {s.short}
+            </li>
+          ))}
+        </ol>
+      </aside>
+
       <main className="auth-main">
         <ThemeToggle className="auth-theme" />
         <div className="auth-panel">
-          <div className="auth-brand">
+          <div className="auth-brand auth-brand-mobile">
             <Logo size={30} />
             <span translate="no">ResearchX</span>
           </div>
-          <h1>{mode === "login" ? "Welcome back" : "Create your account"}</h1>
+          <h2>{mode === "login" ? "Welcome back" : "Create your account"}</h2>
           <p className="muted">
             {mode === "login" ? "Log in to continue to your research projects." : "Projects are saved to your own private workspace."}
           </p>

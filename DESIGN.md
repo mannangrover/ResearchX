@@ -59,8 +59,9 @@ under 72 characters (`--measure: 64ch`).
 4px base scale: `--s-1` 4 · `--s-2` 8 · `--s-3` 12 · `--s-4` 16 · `--s-5` 24 ·
 `--s-6` 32 · `--s-7` 48 · `--s-8` 64 · `--s-9` 96 · `--s-10` 128.
 Section padding: 96px desktop, 64px mobile. Content width 1120px
-(`--content`), 24px gutters (16px on phones). Everything is left-aligned except
-the centred login form.
+(`--content`), 24px gutters (16px on phones). Everything is left-aligned. The login page
+is a split screen: a dark description panel on the left (hidden on small screens)
+and the form on the right.
 
 ## Shape and depth
 
