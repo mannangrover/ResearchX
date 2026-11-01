@@ -24,7 +24,7 @@ export default function Stepper({ completed, available, selected, onSelect, runn
       <div className="stepper-head">
         <span className="eyebrow">Workflow</span>
         <span className="small muted">
-          <strong className="text">{completed}</strong> of {BUILT_STAGES} live stages complete · {STAGES.length - BUILT_STAGES}{" "}
+          <strong className="text">{STAGES.filter((s) => s.built && s.n <= completed).length}</strong> of {BUILT_STAGES} live stages complete · {STAGES.length - BUILT_STAGES}{" "}
           planned
         </span>
       </div>
@@ -45,7 +45,7 @@ export default function Stepper({ completed, available, selected, onSelect, runn
       </div>
       <div className="stepper" role="tablist" aria-label="Project stages" ref={listRef} onKeyDown={onKeyDown}>
         {STAGES.map((s) => {
-          const state = s.n <= completed ? "done" : s.n === completed + 1 && s.built ? "current" : s.built ? "todo" : "locked";
+          const state = !s.built ? "locked" : s.n <= completed ? "done" : s.n === completed + 1 ? "current" : "todo";
           const enabled = available.includes(s.n);
           const isSelected = s.n === selected;
           return (

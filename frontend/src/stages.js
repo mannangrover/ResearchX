@@ -9,7 +9,7 @@ export const STAGES = [
   { n: 7, name: "Experiment Planning", short: "Plan", icon: "flask", output: "Experiment and methodology plan", built: true },
   { n: 8, name: "Paper Evaluation", short: "Paper", icon: "file", output: "Plan-compliance and quality report on the uploaded paper", built: true },
   { n: 9, name: "Reviewer Simulation", short: "Review", icon: "users", output: "Reviewer feedback and checklist", built: false },
-  { n: 10, name: "Publication Guidance", short: "Publish", icon: "rocket", output: "Venue shortlist and readiness", built: false },
+  { n: 10, name: "Publication Guidance", short: "Publish", icon: "rocket", output: "Readiness and target venue tier", built: true },
 ];
 
 // Stages grouped into four modules, each with one clear input -> output
@@ -24,6 +24,7 @@ export const BUILT_STAGES = STAGES.filter((s) => s.built).length;
 
 // Which stage a project has completed, based on stored results
 export function completedStage(project) {
+  if (project.guidance) return 10;
   if (project.paper) return 8;
   if (project.plan) return 7;
   if (project.refinement?.approved) return 6;

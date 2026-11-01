@@ -55,6 +55,8 @@ export const api = {
   plan: (id, options) => request(`/projects/${id}/plan`, { method: "POST", body: JSON.stringify(options) }),
   // Stage 8 — paper evaluation ({ filename, content_base64, change_note })
   paper: (id, body) => request(`/projects/${id}/paper`, { method: "POST", body: JSON.stringify(body) }),
+  // Stage 10 — publication guidance (readiness + target tier)
+  guidance: (id) => request(`/projects/${id}/guidance`, { method: "POST" }),
   // Versions inside a project
   switchVersion: (id, n) => request(`/projects/${id}/versions/${n}/switch`, { method: "POST" }),
 };

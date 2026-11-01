@@ -6,7 +6,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from ..auth import User, current_user
 from ..schemas import LiteratureRequest, PaperUpload, PlanOptions, ProjectCreate, ProposalUpdate, RefineMessage
-from ..services import experiment_service, paper_service, pipeline, refinement_service, versions_service
+from ..services import experiment_service, guidance_service, paper_service, pipeline, refinement_service, versions_service
 from ..services.github_service import GitHubError, parse_repo_url
 from ..storage import get_store
 
@@ -152,11 +152,11 @@ async def refine_apply(pid: str, user: User = Depends(current_user)):
         raise HTTPException(409, "Approve the refined proposal first")
     history = versions_service.branch(project, "Refined")
     refined = {**project, **refinement_service.refined_input(state["proposal"]),
-               "refinement": None, "plan": None, "paper": None, "history": history}
+               "refinement": None, "plan": None, "paper": None, "guidance": None, "history": history}
     literature, score = await run_in_threadpool(pipeline.rescore_refined, refined)
     return store.update_project(pid, {
         "title": refined["title"], "idea_text": refined["idea_text"], "history": history, "stage": 4,
-        "literature": literature, "score": score, "refinement": None, "plan": None, "paper": None,
+        "literature": literature, "score": score, "refinement": None, "plan": None, "paper": None, "guidance": None,
     })
 
 
@@ -193,3 +193,14 @@ async def paper(pid: str, body: PaperUpload, user: User = Depends(current_user))
     summary = paper_service.draft_summary(previous, len(drafts) + 1) if previous else None
     result["drafts"] = [*drafts, summary] if summary else drafts
     return store.save_stage(pid, "paper", result, stage=8)
+
+
+# ---------------------------------------------------------------- stage 10: publication guidance
+@router.post("/{pid}/guidance")
+def guidance(pid: str, user: User = Depends(current_user)):
+    """Readiness and target venue tier, computed from the stage 4 score and the stage 8 paper evaluation."""
+    store = get_store(user)
+    project = _get_or_404(store, pid)
+    if not (project.get("paper") or {}).get("analysis") or not project.get("score"):
+        raise HTTPException(409, "Evaluate your paper (stage 8) first")
+    return store.save_stage(pid, "guidance", guidance_service.assess(project), stage=10)

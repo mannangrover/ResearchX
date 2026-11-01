@@ -672,6 +672,14 @@ textarea { resize: vertical; line-height: 1.5; }
 .consistency li.ok .icon { color: var(--ok); }
 .consistency li.warn .icon { color: var(--warn); }
 .consistency li.fail .icon { color: var(--danger); }
+.guidance-head { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.guidance-card { display: grid; gap: 6px; padding: 16px 18px; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--surface-2); }
+.guidance-card strong { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 1.5rem; line-height: 1.2; color: var(--text); }
+.guidance-card strong.band-strong { color: var(--ok); }
+.guidance-card strong.band-limited { color: var(--warn); }
+.guidance-card strong.band-weak { color: var(--danger); }
+.guidance-card strong .icon { color: var(--primary); }
+.tier-rules { margin-top: 14px; }
 .checks-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .repro-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: 0.86rem; }
 .repro-list li { display: flex; gap: 8px; align-items: center; }
@@ -682,8 +690,17 @@ textarea { resize: vertical; line-height: 1.5; }
   .modules { display: none; }
 }
 @media (max-width: 800px) {
-  .paper-head, .checks-grid { grid-template-columns: 1fr 1fr; }
+  .paper-head, .guidance-head { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.guidance-card { display: grid; gap: 6px; padding: 16px 18px; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--surface-2); }
+.guidance-card strong { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 1.5rem; line-height: 1.2; color: var(--text); }
+.guidance-card strong.band-strong { color: var(--ok); }
+.guidance-card strong.band-limited { color: var(--warn); }
+.guidance-card strong.band-weak { color: var(--danger); }
+.guidance-card strong .icon { color: var(--primary); }
+.tier-rules { margin-top: 14px; }
+.checks-grid { grid-template-columns: 1fr 1fr; }
   .consistency { grid-template-columns: 1fr; }
+  .guidance-head { grid-template-columns: 1fr; }
   .paper-score.main { grid-column: 1 / -1; }
   .journey-step { grid-template-columns: 1fr; gap: 6px; }
   .journey-step::before { display: none; }

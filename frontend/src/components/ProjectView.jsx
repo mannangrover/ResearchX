@@ -11,6 +11,7 @@ import GapsPanel from "./GapsPanel";
 import RefinementPanel from "./RefinementPanel";
 import PlanPanel from "./PlanPanel";
 import PaperPanel from "./PaperPanel";
+import GuidancePanel from "./GuidancePanel";
 import { LegacySummary, VersionBanner, VersionCompare, VersionHistory, VersionSwitcher, shownVersion, versionsOf, viewOf } from "./Versions";
 
 const STEPS = {
@@ -20,7 +21,8 @@ const STEPS = {
   literature: { stage: 3, label: "Searching OpenAlex, Semantic Scholar and arXiv, then ranking papers…" },
   score: { stage: 4, label: "Computing the Research Opportunity Score and research gaps…" },
   plan: { stage: 7, label: "Designing the experiment plan…" },
-  paper: { stage: 8, label: "Reading the paper and checking it against the plan…" },
+  paper: { stage: 8, label: "Reading and analysing the paper…" },
+  guidance: { stage: 10, label: "Assessing publication readiness…" },
 };
 
 // Which tab to open first: the next thing to do, or the headline result
@@ -28,6 +30,7 @@ function defaultTab(project) {
   if (!project.profile) return 2;
   if (!project.literature) return 3;
   if (!project.score) return 4;
+  if (project.guidance || project.paper?.analysis) return 10;
   if (project.plan) return 8;
   if (project.refinement?.approved) return 7;
   return 4;
@@ -239,6 +242,11 @@ export default function ProjectView({ id, onChanged, onDeleted }) {
       <PaperPanel project={shown} running={running === "paper"} disabled={busy} onRun={(body) => run("paper", () => api.paper(id, body))} />
     ) : (
       <Prerequisite stage={8} needs={shown.literature ? 4 : shown.profile ? 3 : 2} onGo={selectTab} />
+    ),
+    10: shown.paper?.analysis ? (
+      <GuidancePanel project={shown} running={running === "guidance"} disabled={busy} onRun={() => run("guidance", () => api.guidance(id))} />
+    ) : (
+      <Prerequisite stage={10} needs={shown.score ? 8 : 4} onGo={selectTab} />
     ),
   };
 

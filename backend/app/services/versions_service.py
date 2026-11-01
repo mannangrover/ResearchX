@@ -7,7 +7,7 @@ full snapshot in projects.history:
     {"current": 3, "current_parent": 2, "current_label": "Refined",
      "versions": [{"version": 1, "parent": None, "label": "Original",
                    "title", "idea_text", "profile", "literature", "score",
-                   "refinement", "plan", "paper", "saved_at"}, ...]}
+                   "refinement", "plan", "paper", "guidance", "saved_at"}, ...]}
 
 Applying a refined proposal *branches* a new version from the working one;
 switching swaps the working version with a stored one, so nothing is lost.
@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException
 
-STAGE_DATA = ("profile", "literature", "score", "refinement", "plan", "paper")
+STAGE_DATA = ("profile", "literature", "score", "refinement", "plan", "paper", "guidance")
 
 
 def _now() -> str:
@@ -37,6 +37,8 @@ def load(project: dict) -> dict:
 
 def stage_of(data: dict) -> int:
     """Highest completed stage of a version, from the data it holds."""
+    if data.get("guidance"):
+        return 10
     if data.get("paper"):
         return 8
     if data.get("plan"):

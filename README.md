@@ -3,7 +3,7 @@
 ResearchX takes a research idea and/or a GitHub repository, finds related literature, and gives an
 evidence-based **Research Opportunity Score (ROS)** with research gaps and suggested modifications.
 
-This repository implements stages 1–8 of the 10-stage workflow in the SRS, grouped into four modules:
+This repository implements stages 1–8 and 10 of the 10-stage workflow in the SRS (stage 9, Reviewer Simulation, is deferred because stage 8 already critiques the paper), grouped into four modules:
 
 | Module | Stages | Input → Output |
 |---|---|---|
@@ -22,7 +22,8 @@ This repository implements stages 1–8 of the 10-stage workflow in the SRS, gro
 | 6 | Interactive Refinement (advisor chat → editable refined proposal → approve → new **version** of the same project: profile and papers are reused, only the ROS is re-computed; every version keeps its own data and can be opened and worked on separately) | ✅ Built |
 | 7 | Experiment Planning (hypotheses traced to RQs, datasets, baselines, metrics, experiments, ablations, timeline fitted to the time budget, risks; Markdown export) | ✅ Built |
 | 8 | Paper Evaluation (the student does the research, writes the paper and uploads it as PDF/DOCX/TeX/MD). **Paper analysis** on its own terms: are the research questions, aims, hypotheses and contributions the paper states actually answered, are the abstract/conclusion claims backed by the results, six internal-consistency checks; paper score also covers methodology, clarity, references and reproducibility. **Compared with project** (information only): closest papers, stage 5 gaps, stage 6 questions, stage 7 plan done / changed / not done. Draft history. | ✅ Built |
-| 9–10 | Reviewer Simulation, Publication Guidance | Next milestones |
+| 9 | Reviewer Simulation | Deferred |
+| 10 | Publication Guidance: **readiness** (Ready / Almost ready / Revise first, from the stage 8 paper score and blockers) and **target venue tier** (Top / Mid / Workshop-student track, from a weighted strength of paper quality, ROS, novelty, contribution and methodology, with the thresholds and what is missing for the next tier). Rule-based, no invented venue names. | ✅ Built |
 
 ## Architecture
 
@@ -132,6 +133,7 @@ cd backend && python -m scripts.smoke_test https://github.com/qodo-ai/pr-agent
 | `POST` | `/api/projects/{id}/versions/{n}/switch` | open version `n` to work on (the previously open version is stored intact) |
 | `POST` | `/api/projects/{id}/plan` | 7 — experiment plan (`{"weeks": 12, "team_size": 2, "compute": "cpu"\|"single_gpu"\|"multi_gpu", "notes": ""}`) |
 | `POST` | `/api/projects/{id}/paper` | 8 — evaluate the uploaded paper (`{"filename", "content_base64", "change_note"}`) |
+| `POST` | `/api/projects/{id}/guidance` | 10 — readiness and target venue tier |
 
 Re-running a stage clears the stages after it, so results never go stale.
 
