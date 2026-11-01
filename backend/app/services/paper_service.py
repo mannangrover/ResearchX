@@ -21,7 +21,8 @@ estimated from the deterministic checks. Only the evaluation is stored, not
 the paper text.
 
 `analyse_standalone` runs the same paper analysis with no project behind it: it
-also describes what the paper is and finds the closest published work itself.
+also describes what the paper is, finds the closest published work itself and
+says where to submit.
 """
 import base64
 import binascii
@@ -35,12 +36,16 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException
 
-from . import llm_service
+from . import guidance_service, llm_service
 from .experiment_service import active_proposal
 from .literature_service import retrieve_papers
 from .similarity_service import score_papers
 
-MAX_BYTES = 15 * 1024 * 1024
+MAX_MB = 30
+MAX_BYTES = MAX_MB * 1024 * 1024
+# Size comes from figures, which cost little. Thousands of pages of text would exhaust the host's 512 MB.
+MAX_PDF_PAGES = 300
+MAX_TEXT_CHARS = 3_000_000
 MAX_DOCX_XML_BYTES = 100 * 1024 * 1024  # a small .docx can unzip to gigabytes
 EXTENSIONS = {"pdf", "docx", "tex", "md", "txt"}
 
@@ -99,13 +104,15 @@ def extract_text(filename: str, data: bytes) -> tuple[str, int | None]:
     if ext not in EXTENSIONS:
         raise HTTPException(415, "Upload a PDF, Word (.docx), LaTeX (.tex), Markdown or text file")
     if len(data) > MAX_BYTES:
-        raise HTTPException(413, "The file is larger than 15 MB")
+        raise HTTPException(413, f"The file is larger than {MAX_MB} MB")
     pages = None
     try:
         if ext == "pdf":
             from pypdf import PdfReader
             reader = PdfReader(io.BytesIO(data))
             pages = len(reader.pages)
+            if pages > MAX_PDF_PAGES:
+                raise HTTPException(413, f"The PDF has {pages} pages. Upload a paper of up to {MAX_PDF_PAGES} pages.")
             text = "\n".join(page.extract_text() or "" for page in reader.pages)
         elif ext == "docx":
             archive = zipfile.ZipFile(io.BytesIO(data))
@@ -123,6 +130,8 @@ def extract_text(filename: str, data: bytes) -> tuple[str, int | None]:
         raise
     except Exception as e:  # corrupt or encrypted files
         raise HTTPException(422, f"Could not read the file: {e}") from e
+    if len(text) > MAX_TEXT_CHARS:
+        raise HTTPException(413, "The document has too much text to be one paper. Upload the paper on its own.")
     text = re.sub(r"[ \t]+", " ", text.replace("\r", ""))
     if len(text.split()) < 300:
         raise HTTPException(422, "Too little text could be extracted (is the PDF a scanned image?). Upload a text-based PDF, .docx or .tex file.")
@@ -722,7 +731,7 @@ def _related_work(about: dict) -> dict:
     try:
         found = retrieve_papers(queries)
     except Exception as e:  # the analysis must survive a literature-search failure
-        return {"papers": [], "queries": queries, "errors": [str(e)]}
+        return {"papers": [], "queries": queries, "errors": [str(e)], "venues": guidance_service.suggest_venues([], None)}
     papers = [p for p in found["papers"] if p.get("abstract")] or found["papers"]
     own = _tokens(about["title"])
 
@@ -731,13 +740,16 @@ def _related_work(about: dict) -> dict:
         return bool(own and t) and len(own & t) / max(len(own), len(t)) >= 0.85
 
     papers = [p for p in papers if not is_itself(p)]
-    rows, backend = [], None
+    rows, backend, closest = [], None, []
     if papers:
         sims, backend = score_papers(" ".join([about["title"], about["summary"], about["problem"], about["method"], " ".join(about["keywords"])]), papers)
-        for p, sim in sorted(zip(papers, sims), key=lambda pair: -pair[1])[:8]:
+        closest = [{**p, "similarity": sim} for p, sim in sorted(zip(papers, sims), key=lambda pair: -pair[1])]
+        for p in closest[:8]:
+            sim = p["similarity"]
             rows.append({"title": p["title"], "year": p.get("year"), "venue": p.get("venue") or "", "citations": p.get("citations"),
                          "url": p.get("url") or "", "similarity": round(sim, 3)})
-    return {"papers": rows, "queries": queries, "errors": found["errors"], "embedding_backend": backend}
+    return {"papers": rows, "queries": queries, "errors": found["errors"], "embedding_backend": backend,
+            "venues": guidance_service.suggest_venues(closest, backend)}
 
 
 def analyse_standalone(filename: str, data: bytes) -> dict:
@@ -774,7 +786,7 @@ def analyse_standalone(filename: str, data: bytes) -> dict:
     llm_fixes = [{"priority": _pick(f.get("priority"), tuple(order), "medium"), "section": str(f.get("section") or ""),
                   "issue": str(f.get("issue") or ""), "fix": str(f.get("fix") or "")}
                  for f in raw.get("fixes") or [] if isinstance(f, dict) and f.get("issue")]
-    return {
+    result = {
         "standalone": True,
         "file": {"name": filename[:200], "size": len(data), "pages": pages, "words": checks["words"]},
         "about": about,
@@ -792,6 +804,8 @@ def analyse_standalone(filename: str, data: bytes) -> dict:
         "note": llm_note,
         "evaluated_at": _now(),
     }
+    result["guidance"] = guidance_service.assess_paper(result)
+    return result
 
 
 def draft_summary(paper: dict, draft: int) -> dict | None:

@@ -26,6 +26,7 @@ _arxiv_last_call = 0.0
 # Successful searches are cached so re-runs (and demos) don't depend on the APIs responding
 CACHE_DIR = Path(__file__).resolve().parents[2] / ".cache" / "literature"
 CACHE_HOURS = 24
+CACHE_VERSION = 2  # raise when the fields kept for a paper change, so older cached searches are not reused
 
 
 def _norm_title(t: str) -> str:
@@ -98,6 +99,8 @@ def search_openalex(query: str, limit: int) -> list[dict]:
             "year": w.get("publication_year"),
             "authors": [a["author"]["display_name"] for a in w.get("authorships", [])[:6] if a.get("author")],
             "venue": source.get("display_name") or "",
+            "venue_type": source.get("type"),
+            "venue_core": source.get("is_core"),
             "citations": w.get("cited_by_count") or 0,
             "url": w.get("doi") or w.get("id"),
             "arxiv_id": None,
@@ -174,7 +177,7 @@ def search_arxiv(query: str, limit: int) -> list[dict]:
 
 
 def _cache_file(source: str, query: str, limit: int) -> Path:
-    key = hashlib.sha1(f"{source}|{query.strip().lower()}|{limit}".encode()).hexdigest()[:20]
+    key = hashlib.sha1(f"{CACHE_VERSION}|{source}|{query.strip().lower()}|{limit}".encode()).hexdigest()[:20]
     return CACHE_DIR / f"{key}.json"
 
 

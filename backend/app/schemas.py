@@ -38,5 +38,5 @@ class PlanOptions(BaseModel):
 
 class PaperUpload(BaseModel):
     filename: str = Field(..., min_length=3, max_length=200)
-    content_base64: str = Field(..., min_length=10, max_length=21_000_000)  # ~15 MB file
+    content_base64: str = Field(..., min_length=10, max_length=42_000_000)  # ~30 MB file
     change_note: str = Field("", max_length=3000)

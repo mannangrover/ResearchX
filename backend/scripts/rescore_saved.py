@@ -111,6 +111,9 @@ def _rescore(data: dict, apply: bool, notes: list[str]) -> list[str]:
         before = (paper["score"]["total"], paper["score"]["band"])
         _rescore_paper(paper)
         changes.append(f"paper {before[0]} {before[1]} -> {paper['score']['total']} {paper['score']['band']}")
+        if paper.get("standalone"):
+            paper["guidance"] = guidance_service.assess_paper(paper)
+            changes.append(f"target tier {paper['guidance']['tier']['name']}")
     guidance = data.get("guidance")
     if guidance and score and paper and paper.get("analysis") and score.get("dimensions"):
         old = (guidance.get("tier") or {}).get("name"), (guidance.get("readiness") or {}).get("label")

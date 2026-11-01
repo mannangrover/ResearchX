@@ -27,7 +27,7 @@ This repository implements stages 1–8 and 10 of the 10-stage workflow in the S
 
 ## Analyse a single paper
 
-The sidebar's **Analyse a Paper** button needs no project: upload a PDF, Word, LaTeX, Markdown or text file to get what the paper is about, whether it answers its own questions, whether its claims are backed by its results, the closest published work, a score with fixes, and comparisons between revised drafts. Analyses are private to the account and share the trash with projects.
+The sidebar's **Analyse a Paper** button needs no project: upload a PDF, Word, LaTeX, Markdown or text file to get what the paper is about, whether it answers its own questions, whether its claims are backed by its results, the closest published work, a score with fixes, where to submit it, and comparisons between revised drafts. **Where to submit** gives the same readiness and target tier as stage 10, with novelty measured against the closest papers in place of the opportunity score, so its tier can differ from a project's. It also names journals and conferences, only from where the closest papers were published: journals must be on OpenAlex's core list, and each has a link to check its rank on SCImago or CORE. Analyses are private to the account and share the trash with projects.
 
 Only research papers are scored. Notes, assignments, slides and similar documents are refused with what they appear to be, here and in stage 8, and nothing is saved. No score gives marks by default: whatever a document or project does not show earns 0.
 

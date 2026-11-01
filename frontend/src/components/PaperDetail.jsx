@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import Icon from "./Icon";
 import { Alert, MethodChip, Tags } from "./common";
+import { GuidanceDetails } from "./GuidancePanel";
 import { Analysis, BAND_CLASS, Checks, Quality, UploadForm, analysisCounts, qualityBand, ratio } from "./PaperPanel";
 
 const SECTIONS = [
@@ -9,6 +10,7 @@ const SECTIONS = [
   ["analysis", "Paper analysis", "search"],
   ["score", "Score & fixes", "gauge"],
   ["related", "Related work", "book"],
+  ["submit", "Where to submit", "rocket"],
   ["checks", "Checks", "check"],
 ];
 
@@ -93,6 +95,67 @@ function Related({ paper }) {
       </ul>
       {errors.length > 0 && <p className="small muted">Some sources were unavailable: {errors.join("; ")}</p>}
     </>
+  );
+}
+
+function VenueGroup({ title, venues, none }) {
+  return (
+    <div>
+      <h3 className="sub-title">{title}</h3>
+      {venues.length === 0 ? (
+        <p className="small muted">{none}</p>
+      ) : (
+        <ul className="related-list venue-list">
+          {venues.map((v) => (
+            <li key={v.name}>
+              <div>
+                <strong>{v.name}</strong>
+                <span className="related-meta">
+                  {v.papers > 1 ? `${v.papers} of the closest papers. Closest: ` : "Published: "}
+                  {v.closest.url ? (
+                    <a href={v.closest.url} target="_blank" rel="noreferrer">
+                      {v.closest.title}
+                    </a>
+                  ) : (
+                    v.closest.title
+                  )}
+                  {v.closest.year ? ` (${v.closest.year})` : ""}
+                </span>
+              </div>
+              <a className="btn btn-secondary btn-sm" href={v.rank_url} target="_blank" rel="noreferrer" aria-label={`Check the rank of ${v.name}`}>
+                Check rank <Icon name="external" size={13} />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function Submit({ paper }) {
+  const venues = paper.related.venues;
+  if (!paper.guidance) return <Alert kind="info">Upload this paper again to see where to submit it.</Alert>;
+  return (
+    <GuidanceDetails guidance={paper.guidance}>
+      {venues ? (
+        <>
+          <p className="small muted">
+            These are where the papers closest to yours were published, so the topic fits. That does not mean your paper will be
+            accepted, and ResearchX does not know their rank. Use Check rank and compare it with your target tier above.
+          </p>
+          <VenueGroup title="Journals" venues={venues.journals} none="None of the closest papers appeared in a journal on OpenAlex's core list." />
+          <VenueGroup title="Conferences" venues={venues.conferences} none="None of the closest papers appeared at a conference." />
+          <p className="small muted">
+            OpenAlex's core list removes many low-quality journals but not all of them, and conferences are not vetted at all, so
+            check each one first. A venue missing from the rank page is a warning sign, though that page mostly covers computing
+            conferences.
+          </p>
+        </>
+      ) : (
+        <Alert kind="info">Upload this paper again to see named journals and conferences.</Alert>
+      )}
+    </GuidanceDetails>
   );
 }
 
@@ -240,6 +303,7 @@ export default function PaperDetail({ id, onChanged, onDeleted }) {
           {section === "analysis" && <Analysis paper={paper} />}
           {section === "score" && <Quality paper={paper} />}
           {section === "related" && <Related paper={paper} />}
+          {section === "submit" && <Submit paper={paper} />}
           {section === "checks" && <Checks paper={paper} />}
         </div>
       </section>

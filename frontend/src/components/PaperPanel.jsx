@@ -4,7 +4,7 @@ import { Alert, StageCard } from "./common";
 import { Delta } from "./Versions";
 
 const ACCEPT = ".pdf,.docx,.tex,.md,.txt";
-const MAX_MB = 15;
+const MAX_MB = 30;
 
 // Quality bands (older evaluations used the readiness-style names on the right)
 export const BAND_CLASS = { Strong: "band-strong", Adequate: "band-limited", Weak: "band-weak", "Ready for review": "band-strong", "Needs revision": "band-limited", "Major revision": "band-weak" };
@@ -120,7 +120,7 @@ export function UploadForm({ busy, revision, withNote = true, onSubmit, onCancel
         ) : (
           <span>
             <strong>{revision ? "Upload the revised draft" : "Upload your paper"}</strong>
-            <span className="small muted">Drag a file here or click to browse · PDF, DOCX, TeX, Markdown or text · up to {MAX_MB} MB</span>
+            <span className="small muted">Drag a file here or click to browse · PDF, DOCX, TeX, Markdown or text · up to {MAX_MB} MB, 300 pages</span>
           </span>
         )}
       </label>

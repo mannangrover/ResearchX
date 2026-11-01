@@ -775,6 +775,8 @@ textarea { resize: vertical; line-height: 1.5; }
 .related-meta { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--muted); }
 .related-sim { display: grid; gap: 3px; font-size: var(--fs-xs); color: var(--text-2); font-variant-numeric: tabular-nums; }
 .related-sim .mini-progress { width: 100%; }
+.venue-list li { grid-template-columns: minmax(0, 1fr) auto; }
+.venue-list .related-meta a { font-weight: 400; color: inherit; text-decoration: underline; }
 .checks-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .repro-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: 0.86rem; }
 .repro-list li { display: flex; gap: 8px; align-items: center; }
@@ -1048,6 +1050,7 @@ textarea { resize: vertical; line-height: 1.5; }
   .about-grid { grid-template-columns: 1fr; }
   .related-list li { grid-template-columns: minmax(0, 1fr) auto; }
   .related-sim { display: none; }
+  .venue-list li { grid-template-columns: minmax(0, 1fr); justify-items: start; gap: var(--s-2); }
   .layout { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto; max-height: 360px; border-right: 0; border-bottom: 1px solid var(--border); }
   .sidebar-foot { display: none; }

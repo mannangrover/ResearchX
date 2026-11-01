@@ -41,7 +41,7 @@ export default function PapersPage({ papers, onChanged, onOpen }) {
         <h1 className="page-title">Analyse a paper</h1>
         <p className="paper-page-intro">
           Upload a paper to see what it is about, whether it answers its own questions, whether its claims are backed by its
-          results, and which published work is closest to it. No project needed.
+          results, which published work is closest to it, and where to submit it. No project needed.
         </p>
       </header>
 

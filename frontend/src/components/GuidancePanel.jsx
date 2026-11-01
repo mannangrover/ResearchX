@@ -10,36 +10,12 @@ const READY_TEXT = {
 const TIER_ICON = { top: "star", mid: "target", entry: "lightbulb" };
 const pct = (v) => `${Math.round(v * 100)}%`;
 
-export default function GuidancePanel({ project, running, disabled, onRun }) {
-  const g = project.guidance;
-  const run = (
-    <button className={`btn ${g ? "btn-secondary btn-sm" : "btn-primary"}`} disabled={disabled} onClick={onRun}>
-      {running ? <span className="spinner sm" aria-hidden="true" /> : <Icon name={g ? "refresh" : "rocket"} size={14} />}
-      {running ? "Assessing…" : g ? "Re-assess" : "Assess Publication Readiness"}
-    </button>
-  );
-
-  if (!g) {
-    return (
-      <StageCard
-        stage={10}
-        title="Publication guidance"
-        description="Combines your paper evaluation (stage 8) with the research opportunity (stage 4) to tell you whether the paper is ready to submit and which tier of venue to aim for. Every rule and number is shown."
-        action={run}
-      />
-    );
-  }
-
+// Readiness and target tier. `children` go right after them, ahead of the reasons.
+export function GuidanceDetails({ guidance: g, children }) {
   const r = g.readiness;
   const t = g.tier;
   return (
-    <StageCard stage={10} title="Publication guidance" done action={run}>
-      <div className="plan-section">
-      <p className="small muted">
-        Based on draft {g.based_on.paper_draft} ({g.based_on.paper_file}). Upload a revised draft in stage 8 and re-assess to
-        update it.
-      </p>
-
+    <>
       <div className="guidance-head">
         <div className="guidance-card">
           <span className="eyebrow">Readiness</span>
@@ -56,6 +32,8 @@ export default function GuidancePanel({ project, running, disabled, onRun }) {
           <span className="small muted">{t.examples}</span>
         </div>
       </div>
+
+      {children}
 
       {r.blockers.length > 0 && (
         <div>
@@ -80,6 +58,7 @@ export default function GuidancePanel({ project, running, disabled, onRun }) {
         <h3 className="sub-title">
           <Icon name="gauge" size={15} /> Why this tier — strength {g.strength.toFixed(2)}
         </h3>
+        {g.note && <p className="small muted">{g.note}</p>}
         <ul className="criteria">
           {g.factors.map((f) => (
             <li key={f.key}>
@@ -140,6 +119,39 @@ export default function GuidancePanel({ project, running, disabled, onRun }) {
       <Alert kind="info">
         Guidance only. Check each venue's scope, ranking and deadlines yourself before submitting.
       </Alert>
+    </>
+  );
+}
+
+export default function GuidancePanel({ project, running, disabled, onRun }) {
+  const g = project.guidance;
+  const run = (
+    <button className={`btn ${g ? "btn-secondary btn-sm" : "btn-primary"}`} disabled={disabled} onClick={onRun}>
+      {running ? <span className="spinner sm" aria-hidden="true" /> : <Icon name={g ? "refresh" : "rocket"} size={14} />}
+      {running ? "Assessing…" : g ? "Re-assess" : "Assess Publication Readiness"}
+    </button>
+  );
+
+  if (!g) {
+    return (
+      <StageCard
+        stage={10}
+        title="Publication guidance"
+        description="Combines your paper evaluation (stage 8) with the research opportunity (stage 4) to tell you whether the paper is ready to submit and which tier of venue to aim for. Every rule and number is shown."
+        action={run}
+      />
+    );
+  }
+
+  return (
+    <StageCard stage={10} title="Publication guidance" done action={run}>
+      <div className="plan-section">
+      <p className="small muted">
+        Based on draft {g.based_on.paper_draft} ({g.based_on.paper_file}). Upload a revised draft in stage 8 and re-assess to
+        update it.
+      </p>
+
+      <GuidanceDetails guidance={g} />
       </div>
     </StageCard>
   );
