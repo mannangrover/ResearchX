@@ -2,7 +2,6 @@ import { useState } from "react";
 import Icon, { Logo } from "./Icon";
 import { Alert } from "./common";
 import ThemeToggle from "./ThemeToggle";
-import LiteratureMap from "./landing/LiteratureMap";
 
 export default function AuthPage({ supabase, demo, initialMode = "login", initialInfo = "" }) {
   const [mode, setMode] = useState(initialMode); // login | signup
@@ -64,25 +63,14 @@ export default function AuthPage({ supabase, demo, initialMode = "login", initia
 
   return (
     <div className="auth">
-      <aside className="auth-aside">
-        <a className="auth-brand" href="#/" aria-label="ResearchX home">
-          <Logo size={30} />
-          <span translate="no">ResearchX</span>
-        </a>
-        <div className="auth-pitch">
-          <h1>Know where your research idea stands before you build it.</h1>
-          <LiteratureMap />
-        </div>
-      </aside>
-
       <main className="auth-main">
         <ThemeToggle className="auth-theme" />
         <div className="auth-panel">
-          <a className="auth-brand auth-brand-mobile" href="#/" aria-label="ResearchX home">
+          <div className="auth-brand">
             <Logo size={30} />
             <span translate="no">ResearchX</span>
-          </a>
-          <h2>{mode === "login" ? "Welcome back" : "Create your account"}</h2>
+          </div>
+          <h1>{mode === "login" ? "Welcome back" : "Create your account"}</h1>
           <p className="muted">
             {mode === "login" ? "Log in to continue to your research projects." : "Projects are saved to your own private workspace."}
           </p>

@@ -10,7 +10,6 @@ const AccountPage = lazy(() => import("./components/AccountPage"));
 const NewProjectForm = lazy(() => import("./components/NewProjectForm"));
 const ProjectView = lazy(() => import("./components/ProjectView"));
 import AuthPage from "./components/AuthPage";
-import LandingPage from "./components/landing/LandingPage";
 import Icon, { Logo } from "./components/Icon";
 import ThemeToggle from "./components/ThemeToggle";
 
@@ -75,7 +74,6 @@ export default function App() {
   useEffect(() => {
     // scope "local": ending this browser's session must not end the account's other sessions
     const endSession = () => {
-      if (!isPrivateRoute()) window.location.hash = "#/login";
       setSessionEnded(true);
       supabase?.auth.signOut({ scope: "local" });
     };
@@ -137,12 +135,10 @@ export default function App() {
   );
 }
 
-// Visitors see the landing page; #/login, #/signup and private pages open the auth page
+// Signed-out visitors log in; #/signup opens the sign-up form
 function SignedOut({ supabase, demo, sessionEnded }) {
   const read = () => window.location.hash.replace(/^#\/?/, "");
   const [page, setPage] = useState(read);
-  const [demoBusy, setDemoBusy] = useState(false);
-  const [demoError, setDemoError] = useState("");
 
   useEffect(() => {
     const onHash = () => setPage(read());
@@ -150,31 +146,9 @@ function SignedOut({ supabase, demo, sessionEnded }) {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  const tryDemo = async () => {
-    setDemoBusy(true);
-    setDemoError("");
-    const { error } = await supabase.auth.signInWithPassword(demo);
-    setDemoBusy(false);
-    if (error) setDemoError(`The demo could not be opened (${error.message}). Try again, or create a free account.`);
-  };
-
-  if (page === "login" || page === "signup" || isPrivateRoute()) {
-    const notice = sessionEnded
-      ? "Your session has ended. Log in again to continue."
-      : page === "login" || page === "signup"
-        ? ""
-        : "Log in to open this page.";
-    return <AuthPage key={page} supabase={supabase} demo={demo} initialMode={page === "signup" ? "signup" : "login"} initialInfo={notice} />;
-  }
-  return (
-    <LandingPage
-      onLogin={() => (window.location.hash = "#/login")}
-      onSignup={() => (window.location.hash = "#/signup")}
-      onDemo={demo ? tryDemo : null}
-      demoBusy={demoBusy}
-      demoError={demoError}
-    />
-  );
+  const mode = page === "signup" ? "signup" : "login";
+  const notice = sessionEnded ? "Your session has ended. Log in again to continue." : isPrivateRoute() ? "Log in to open this page." : "";
+  return <AuthPage key={mode} supabase={supabase} demo={demo} initialMode={mode} initialInfo={notice} />;
 }
 
 function initials(text) {
@@ -186,7 +160,7 @@ function initials(text) {
 function parseHash() {
   const h = window.location.hash.replace(/^#\/?/, "");
   if (h.startsWith("project/")) return { view: "project", id: h.slice("project/".length) };
-  if (["new", "trash", "account", "home"].includes(h)) return { view: h };
+  if (["new", "trash", "account"].includes(h)) return { view: h };
   return { view: "list" };
 }
 
@@ -237,10 +211,6 @@ function Workspace({ supabase, user, isDemo, onLogout }) {
   const projects = allProjects && allProjects.filter((p) => !p.deleted_at);
   const trash = allProjects && allProjects.filter((p) => p.deleted_at);
   const name = isDemo ? "Demo account" : user?.user_metadata?.name || user?.email;
-
-  if (route.view === "home") {
-    return <LandingPage signedIn onLogin={() => go("#/")} onSignup={() => go("#/new")} />;
-  }
 
   return (
     <div className="app">
