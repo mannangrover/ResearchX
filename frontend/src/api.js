@@ -2,13 +2,17 @@
 let getToken = async () => null;
 let onUnauthorized = () => {};
 
+// Dev only: a hot-swapped copy of this module would lose the login above, so reload instead
+if (import.meta.hot) import.meta.hot.accept(() => window.location.reload());
+
 export function configureAuth({ tokenProvider, unauthorized }) {
   getToken = tokenProvider;
   onUnauthorized = unauthorized;
 }
 
-async function request(path, options = {}) {
-  const token = await getToken();
+async function request(path, { isPublic = false, ...options } = {}) {
+  // getToken throws when the login is gone, so a dead session never reaches the API
+  const token = isPublic ? null : await getToken();
   const res = await fetch(`/api${path}`, {
     ...options,
     headers: {
@@ -29,8 +33,8 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  health: () => request("/health"),
-  authConfig: () => request("/auth/config"),
+  health: () => request("/health", { isPublic: true }),
+  authConfig: () => request("/auth/config", { isPublic: true }),
   listProjects: () => request("/projects"),
   getProject: (id) => request(`/projects/${id}`),
   createProject: (body) => request("/projects", { method: "POST", body: JSON.stringify(body) }),

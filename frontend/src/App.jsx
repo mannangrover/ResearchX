@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { api, configureAuth } from "./api";
 import Sidebar from "./components/Sidebar";
 import ProjectsPage from "./components/ProjectsPage";
@@ -14,6 +14,9 @@ import LandingPage from "./components/landing/LandingPage";
 import Icon, { Logo } from "./components/Icon";
 import ThemeToggle from "./components/ThemeToggle";
 
+// Pages that need a login; a signed-out visitor is asked to log in and then returns to them
+const isPrivateRoute = () => /^#\/(project\/|new$|trash$|account$)/.test(window.location.hash);
+
 function Splash({ children }) {
   return (
     <div className="splash" role="status">
@@ -27,6 +30,7 @@ export default function App() {
   const [authConfig, setAuthConfig] = useState(null); // null = loading
   const [session, setSession] = useState(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(false);
   const [attempts, setAttempts] = useState(0);
 
   // The backend needs ~10-20 s to start (it loads the AI models), so keep retrying
@@ -61,14 +65,32 @@ export default function App() {
       setSession(data.session);
       setSessionLoaded(true);
     });
-    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    const { data } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      if (s) setSessionEnded(false);
+    });
     return () => data.subscription.unsubscribe();
   }, [supabase]);
 
   useEffect(() => {
+    // scope "local": ending this browser's session must not end the account's other sessions
+    const endSession = () => {
+      if (!isPrivateRoute()) window.location.hash = "#/login";
+      setSessionEnded(true);
+      supabase?.auth.signOut({ scope: "local" });
+    };
     configureAuth({
-      tokenProvider: async () => (supabase ? (await supabase.auth.getSession()).data.session?.access_token : null),
-      unauthorized: () => supabase?.auth.signOut(),
+      tokenProvider: async () => {
+        if (!supabase) return null;
+        const { data, error } = await supabase.auth.getSession();
+        if (data.session) return data.session.access_token;
+        if (isAuthRetryableFetchError(error)) {
+          throw new Error("Could not reach the login service. Check your connection and try again.");
+        }
+        endSession();
+        throw new Error("Your session has ended. Log in again to continue.");
+      },
+      unauthorized: endSession,
     });
   }, [supabase]);
 
@@ -94,7 +116,7 @@ export default function App() {
       </Splash>
     );
   }
-  if (supabase && !session) return <SignedOut supabase={supabase} demo={authConfig.demo} />;
+  if (supabase && !session) return <SignedOut supabase={supabase} demo={authConfig.demo} sessionEnded={sessionEnded} />;
 
   const user = session?.user;
   return (
@@ -103,13 +125,20 @@ export default function App() {
       supabase={supabase}
       user={user}
       isDemo={!!user && user.email === authConfig.demo?.email}
-      onLogout={supabase ? () => supabase.auth.signOut() : null}
+      onLogout={
+        supabase
+          ? () => {
+              window.location.hash = "#/";
+              supabase.auth.signOut({ scope: "local" });
+            }
+          : null
+      }
     />
   );
 }
 
-// Visitors see the landing page; #/login and #/signup open the auth page
-function SignedOut({ supabase, demo }) {
+// Visitors see the landing page; #/login, #/signup and private pages open the auth page
+function SignedOut({ supabase, demo, sessionEnded }) {
   const read = () => window.location.hash.replace(/^#\/?/, "");
   const [page, setPage] = useState(read);
   const [demoBusy, setDemoBusy] = useState(false);
@@ -129,8 +158,13 @@ function SignedOut({ supabase, demo }) {
     if (error) setDemoError(`The demo could not be opened (${error.message}). Try again, or create a free account.`);
   };
 
-  if (page === "login" || page === "signup") {
-    return <AuthPage key={page} supabase={supabase} demo={demo} initialMode={page} />;
+  if (page === "login" || page === "signup" || isPrivateRoute()) {
+    const notice = sessionEnded
+      ? "Your session has ended. Log in again to continue."
+      : page === "login" || page === "signup"
+        ? ""
+        : "Log in to open this page.";
+    return <AuthPage key={page} supabase={supabase} demo={demo} initialMode={page === "signup" ? "signup" : "login"} initialInfo={notice} />;
   }
   return (
     <LandingPage

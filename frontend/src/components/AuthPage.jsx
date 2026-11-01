@@ -4,12 +4,12 @@ import { Alert } from "./common";
 import ThemeToggle from "./ThemeToggle";
 import LiteratureMap from "./landing/LiteratureMap";
 
-export default function AuthPage({ supabase, demo, initialMode = "login" }) {
+export default function AuthPage({ supabase, demo, initialMode = "login", initialInfo = "" }) {
   const [mode, setMode] = useState(initialMode); // login | signup
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
+  const [info, setInfo] = useState(initialInfo);
 
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
 
